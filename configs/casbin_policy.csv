@@ -1,0 +1,33 @@
+# Casbin Policy Rules for MCP Gateway
+# Format: p, subject, object (URL pattern), action (HTTP method)
+# Format: g, user/role, role (role inheritance)
+
+# Admin role - full access to all resources
+p, admin, /api/v1/*, *
+p, admin, /api/v1/users, *
+p, admin, /api/v1/users/*, *
+
+# Operator role - manage servers and gateway
+p, operator, /api/v1/servers, *
+p, operator, /api/v1/servers/*, *
+p, operator, /api/v1/gateway/*, *
+p, operator, /api/v1/health/*, GET
+p, operator, /api/v1/audit, GET
+p, operator, /api/v1/audit/*, GET
+
+# Viewer role - read-only access
+p, viewer, /api/v1/servers, GET
+p, viewer, /api/v1/servers/*, GET
+p, viewer, /api/v1/health/*, GET
+
+# All authenticated users can access their own profile and API keys
+p, user, /api/v1/me, GET
+p, user, /api/v1/me, PUT
+p, user, /api/v1/api-keys, GET
+p, user, /api/v1/api-keys, POST
+p, user, /api/v1/api-keys/*, DELETE
+
+# Role hierarchy: admin inherits operator, operator inherits viewer
+g, admin, operator
+g, operator, viewer
+g, viewer, user

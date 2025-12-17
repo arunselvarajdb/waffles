@@ -1,0 +1,189 @@
+run:
+  timeout: 5m
+  tests: true
+  modules-download-mode: readonly
+
+output:
+  format: colored-line-number
+  print-issued-lines: true
+  print-linter-name: true
+
+linters:
+  enable:
+    # Default linters
+    - errcheck          # Check for unchecked errors
+    - gosimple          # Simplify code
+    - govet             # Vet examines Go source code
+    - ineffassign       # Detect ineffectual assignments
+    - staticcheck       # Advanced Go linter
+    - unused            # Check for unused code
+
+    # Additional linters
+    - asciicheck        # Check for non-ASCII identifiers
+    - bodyclose         # Check HTTP response body is closed
+    - dogsled           # Check for too many blank identifiers
+    - dupl              # Check for duplicate code
+    - durationcheck     # Check for multiplying time.Duration
+    - errorlint         # Check for error wrapping issues
+    - exhaustive        # Check exhaustiveness of enum switch
+    - exportloopref     # Check for pointers to loop variables
+    - gci               # Control Go package import order
+    - gochecknoinits    # Check for init functions
+    - gocognit          # Compute cognitive complexities
+    - goconst           # Find repeated strings that could be constants
+    - gocritic          # Provides diagnostics that check for bugs
+    - gocyclo           # Compute cyclomatic complexities
+    - godot             # Check if comments end in a period
+    - gofmt             # Check if code was formatted with gofmt
+    - goimports         # Check import statements are formatted
+    - gomnd             # Detect magic numbers
+    - goprintffuncname  # Check printf function names
+    - gosec             # Inspect for security problems
+    - lll               # Report long lines
+    - misspell          # Find misspelled English words
+    - nakedret          # Find naked returns in functions
+    - nestif            # Report deeply nested if statements
+    - nilerr            # Find code returning nil even if it checks err
+    - nlreturn          # Check newline before return
+    - noctx             # Find HTTP requests without context
+    - prealloc          # Find slice declarations that could be preallocated
+    - predeclared       # Find code that shadows predeclared identifiers
+    - revive            # Fast, configurable, extensible linter
+    - rowserrcheck      # Check whether Err of rows is checked
+    - sqlclosecheck     # Check that sql.Rows and sql.Stmt are closed
+    - stylecheck        # Replacement for golint
+    - thelper           # Detect test helpers without t.Helper()
+    - tparallel         # Detect inappropriate usage of t.Parallel()
+    - unconvert         # Remove unnecessary type conversions
+    - unparam           # Report unused function parameters
+    - wastedassign      # Find wasted assignment statements
+    - whitespace        # Detect leading and trailing whitespace
+
+  disable:
+    - funlen            # Checks function length (too strict)
+    - gochecknoglobals  # Checks no global variables (too strict)
+    - godox             # Detect FIXME, TODO comments (noisy)
+    - goerr113          # Enforce error wrapping (too opinionated)
+    - wrapcheck         # Check error wrapping (too strict)
+
+linters-settings:
+  errcheck:
+    check-type-assertions: true
+    check-blank: true
+    exclude-functions:
+      - (io.Closer).Close
+      - (*database/sql.Rows).Close
+
+  govet:
+    check-shadowing: true
+    enable-all: true
+
+  gocyclo:
+    min-complexity: 15
+
+  gocognit:
+    min-complexity: 20
+
+  dupl:
+    threshold: 100
+
+  goconst:
+    min-len: 3
+    min-occurrences: 3
+
+  misspell:
+    locale: US
+
+  lll:
+    line-length: 140
+    tab-width: 4
+
+  nakedret:
+    max-func-lines: 30
+
+  nestif:
+    min-complexity: 4
+
+  prealloc:
+    simple: true
+    range-loops: true
+    for-loops: true
+
+  revive:
+    confidence: 0.8
+    rules:
+      - name: blank-imports
+      - name: context-as-argument
+      - name: context-keys-type
+      - name: dot-imports
+      - name: error-return
+      - name: error-strings
+      - name: error-naming
+      - name: exported
+      - name: if-return
+      - name: increment-decrement
+      - name: var-naming
+      - name: var-declaration
+      - name: package-comments
+      - name: range
+      - name: receiver-naming
+      - name: time-naming
+      - name: unexported-return
+      - name: indent-error-flow
+      - name: errorf
+      - name: empty-block
+      - name: superfluous-else
+      - name: unused-parameter
+      - name: unreachable-code
+      - name: redefines-builtin-id
+
+  gosec:
+    excludes:
+      - G104  # Audit errors not checked (covered by errcheck)
+      - G304  # File path from variable (needed for config files)
+
+  stylecheck:
+    checks: ["all", "-ST1000", "-ST1003"]
+
+  gci:
+    sections:
+      - standard
+      - default
+      - prefix(github.com/waffles/mcp-gateway)
+    skip-generated: true
+
+issues:
+  exclude-rules:
+    # Exclude some linters from running on tests files
+    - path: _test\.go
+      linters:
+        - gocyclo
+        - errcheck
+        - dupl
+        - gosec
+        - goconst
+        - gomnd
+
+    # Exclude test/mock directories
+    - path: test/
+      linters:
+        - errcheck
+        - gosec
+        - dupl
+
+    # Allow embed declarations
+    - linters:
+        - typecheck
+      text: "embed"
+
+  # Maximum issues count per one linter
+  max-issues-per-linter: 0
+
+  # Maximum count of issues with the same text
+  max-same-issues: 0
+
+  # Show all issues from a linter
+  new: false
+
+  # Fix issues if possible
+  fix: false

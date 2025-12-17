@@ -1,0 +1,98 @@
+import { createRouter, createWebHistory } from 'vue-router'
+import { useAuthStore } from '@/stores/auth'
+import LoginView from '@/views/LoginView.vue'
+import AdminDashboard from '@/views/AdminDashboard.vue'
+import UserManagement from '@/views/UserManagement.vue'
+import ServerInspector from '@/views/ServerInspector.vue'
+import ViewerDashboard from '@/views/ViewerDashboard.vue'
+
+const routes = [
+  {
+    path: '/',
+    redirect: '/login'
+  },
+  {
+    path: '/login',
+    name: 'Login',
+    component: LoginView,
+    meta: { guest: true } // Only accessible when not logged in
+  },
+  {
+    path: '/admin',
+    name: 'AdminDashboard',
+    component: AdminDashboard,
+    meta: { requiresAuth: true, requiresAdmin: true }
+  },
+  {
+    path: '/admin/users',
+    name: 'UserManagement',
+    component: UserManagement,
+    meta: { requiresAuth: true, requiresAdmin: true }
+  },
+  {
+    path: '/admin/inspector',
+    name: 'ServerInspector',
+    component: ServerInspector,
+    meta: { requiresAuth: true, requiresAdmin: true }
+  },
+  {
+    path: '/dashboard',
+    name: 'ViewerDashboard',
+    component: ViewerDashboard,
+    meta: { requiresAuth: true }
+  }
+]
+
+const router = createRouter({
+  history: createWebHistory(),
+  routes
+})
+
+// Navigation guards
+router.beforeEach(async (to, from, next) => {
+  const authStore = useAuthStore()
+
+  // Check auth config if we haven't yet (this auto-logins when auth is disabled)
+  if (authStore.authEnabled === null) {
+    await authStore.checkAuthConfig()
+  }
+
+  // If auth is disabled, skip all auth checks
+  if (authStore.authEnabled === false) {
+    // Still redirect from login page to admin when auth is disabled
+    if (to.path === '/login' || to.path === '/') {
+      return next('/admin')
+    }
+    return next()
+  }
+
+  // Check auth status if we have stored state but haven't verified with server
+  if (authStore.isAuthenticated && !authStore.user?.id) {
+    await authStore.checkAuth()
+  }
+
+  // Route requires authentication
+  if (to.meta.requiresAuth) {
+    if (!authStore.isAuthenticated) {
+      // Store the intended destination
+      sessionStorage.setItem('redirectAfterLogin', to.fullPath)
+      return next('/login')
+    }
+
+    // Route requires admin role
+    if (to.meta.requiresAdmin && !authStore.isAdmin) {
+      // Redirect non-admins to viewer dashboard
+      return next('/dashboard')
+    }
+  }
+
+  // Guest-only routes (like login)
+  if (to.meta.guest && authStore.isAuthenticated) {
+    // Redirect logged-in users to dashboard
+    return next(authStore.isAdmin ? '/admin' : '/dashboard')
+  }
+
+  next()
+})
+
+export default router

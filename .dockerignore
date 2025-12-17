@@ -1,0 +1,68 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# CI/CD
+.github
+
+# Documentation
+*.md
+docs/
+TESTING.md
+README.md
+CHANGELOG.md
+
+# Test files (but allow test/cmd for mock server)
+*_test.go
+test/*
+!test/cmd/
+coverage.out
+*.log
+
+# Build artifacts
+bin/
+dist/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Docker
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# Scripts (not needed in container)
+scripts/
+test*.sh
+*.sh
+
+# Deployments (not needed in container)
+deployments/
+
+# Temp files
+/tmp
+*.tmp
+
+# Environment
+.env
+.env.*
+
+# Module cache (will be downloaded during build)
+vendor/
+
+# Frontend
+web-app/node_modules/
+web-app/dist/
+web-app/.vite/
+web-app/.turbo/
+web/

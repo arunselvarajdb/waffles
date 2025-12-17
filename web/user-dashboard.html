@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MCP Gateway - My Servers</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#2563eb',
+                        success: '#10b981',
+                        warning: '#f59e0b',
+                        danger: '#dc2626',
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-gray-50">
+    <!-- Navigation Header -->
+    <nav class="bg-white shadow-sm border-b border-gray-200">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex">
+                    <div class="flex-shrink-0 flex items-center">
+                        <h1 class="text-2xl font-bold text-blue-600">MCP Gateway</h1>
+                        <span class="ml-3 px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded">Viewer</span>
+                    </div>
+                    <div class="hidden sm:ml-6 sm:flex sm:space-x-8">
+                        <a href="#" class="border-blue-500 text-gray-900 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
+                            My Servers
+                        </a>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <span class="text-sm text-gray-700">john.doe@example.com</span>
+                    <button onclick="logout()" class="text-sm text-gray-500 hover:text-gray-700">Logout</button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Info Banner -->
+        <div class="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <div class="flex">
+                <div class="flex-shrink-0">
+                    <svg class="h-5 w-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/>
+                    </svg>
+                </div>
+                <div class="ml-3">
+                    <h3 class="text-sm font-medium text-blue-800">Viewer Access</h3>
+                    <p class="mt-1 text-sm text-blue-700">
+                        You can view and configure tools for your assigned servers. Contact an administrator to get access to more servers.
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Assigned Servers Section -->
+        <div class="bg-white rounded-lg shadow">
+            <!-- Header -->
+            <div class="px-6 py-4 border-b border-gray-200">
+                <h2 class="text-xl font-semibold text-gray-900">My Assigned Servers (3)</h2>
+                <p class="text-sm text-gray-500 mt-1">Servers you have been granted access to</p>
+            </div>
+
+            <!-- Servers Grid/List -->
+            <div class="p-6">
+                <!-- Server 1 - Filesystem Server -->
+                <div class="mb-6 border border-gray-200 rounded-lg hover:shadow-md transition-shadow">
+                    <div class="p-6">
+                        <div class="flex items-start justify-between">
+                            <div class="flex-1">
+                                <div class="flex items-center">
+                                    <span class="h-3 w-3 rounded-full bg-green-500 mr-3"></span>
+                                    <h3 class="text-lg font-semibold text-gray-900">Filesystem Server</h3>
+                                    <span class="ml-3 px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded">Healthy</span>
+                                </div>
+                                <p class="text-sm text-gray-600 mt-2">Primary file operations and management</p>
+                                <div class="mt-3 flex items-center text-sm text-gray-500">
+                                    <span class="mr-4">
+                                        <svg class="inline h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path>
+                                        </svg>
+                                        http://localhost:9001
+                                    </span>
+                                    <span>
+                                        <svg class="inline h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+                                        </svg>
+                                        No Auth
+                                    </span>
+                                </div>
+                            </div>
+                            <button onclick="openToolsModal('Filesystem Server')" class="ml-4 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium">
+                                Configure Tools
+                            </button>
+                        </div>
+
+                        <!-- Available Tools Preview -->
+                        <div class="mt-4 pt-4 border-t border-gray-200">
+                            <div class="text-xs font-medium text-gray-700 mb-2">Available Tools</div>
+                            <div class="flex flex-wrap gap-2">
+                                <span class="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded">read_file</span>
+                                <span class="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded">write_file</span>
+                                <span class="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded">list_directory</span>
+                                <span class="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded">delete_file</span>
+                                <span class="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded">move_file</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Server 2 - Slack Integration -->
+                <div class="mb-6 border border-gray-200 rounded-lg hover:shadow-md transition-shadow">
+                    <div class="p-6">
+                        <div class="flex items-start justify-between">
+                            <div class="flex-1">
+                                <div class="flex items-center">
+                                    <span class="h-3 w-3 rounded-full bg-green-500 mr-3"></span>
+                                    <h3 class="text-lg font-semibold text-gray-900">Slack Integration</h3>
+                                    <span class="ml-3 px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded">Healthy</span>
+                                </div>
+                                <p class="text-sm text-gray-600 mt-2">Send messages and notifications to Slack</p>
+                                <div class="mt-3 flex items-center text-sm text-gray-500">
+                                    <span class="mr-4">
+                                        <svg class="inline h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path>
+                                        </svg>
+                                        http://slack-mcp:4000
+                                    </span>
+                                    <span>
+                                        <svg class="inline h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+                                        </svg>
+                                        Bearer Token
+                                    </span>
+                                </div>
+                            </div>
+                            <button onclick="openToolsModal('Slack Integration')" class="ml-4 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium">
+                                Configure Tools
+                            </button>
+                        </div>
+
+                        <!-- Available Tools Preview -->
+                        <div class="mt-4 pt-4 border-t border-gray-200">
+                            <div class="text-xs font-medium text-gray-700 mb-2">Available Tools</div>
+                            <div class="flex flex-wrap gap-2">
+                                <span class="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded">send_message</span>
+                                <span class="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded">list_channels</span>
+                                <span class="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded">create_channel</span>
+                                <span class="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded">upload_file</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Server 3 - GitHub Integration -->
+                <div class="border border-gray-200 rounded-lg hover:shadow-md transition-shadow">
+                    <div class="p-6">
+                        <div class="flex items-start justify-between">
+                            <div class="flex-1">
+                                <div class="flex items-center">
+                                    <span class="h-3 w-3 rounded-full bg-green-500 mr-3"></span>
+                                    <h3 class="text-lg font-semibold text-gray-900">GitHub Integration</h3>
+                                    <span class="ml-3 px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded">Healthy</span>
+                                </div>
+                                <p class="text-sm text-gray-600 mt-2">GitHub repository operations and management</p>
+                                <div class="mt-3 flex items-center text-sm text-gray-500">
+                                    <span class="mr-4">
+                                        <svg class="inline h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path>
+                                        </svg>
+                                        http://github-mcp:5000
+                                    </span>
+                                    <span>
+                                        <svg class="inline h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+                                        </svg>
+                                        Bearer Token
+                                    </span>
+                                </div>
+                            </div>
+                            <button onclick="openToolsModal('GitHub Integration')" class="ml-4 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium">
+                                Configure Tools
+                            </button>
+                        </div>
+
+                        <!-- Available Tools Preview -->
+                        <div class="mt-4 pt-4 border-t border-gray-200">
+                            <div class="text-xs font-medium text-gray-700 mb-2">Available Tools</div>
+                            <div class="flex flex-wrap gap-2">
+                                <span class="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded">create_issue</span>
+                                <span class="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded">list_repos</span>
+                                <span class="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded">create_pr</span>
+                                <span class="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded">commit_file</span>
+                                <span class="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded">search_code</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Configure Tools Modal -->
+    <div id="toolsModal" class="hidden fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+                <h3 class="text-lg font-medium text-gray-900">Configure Tools - <span id="modalServerName"></span></h3>
+                <button onclick="closeToolsModal()" class="text-gray-400 hover:text-gray-600">
+                    <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+            <div class="px-6 py-4">
+                <p class="text-sm text-gray-600 mb-4">Select the tools you want to use with this server. Your selections will be saved to your profile.</p>
+
+                <!-- Tools List with Checkboxes -->
+                <div class="space-y-3">
+                    <label class="flex items-start p-3 border border-gray-200 rounded-md hover:bg-gray-50 cursor-pointer">
+                        <input type="checkbox" checked class="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+                        <div class="ml-3">
+                            <span class="text-sm font-medium text-gray-900">read_file</span>
+                            <p class="text-xs text-gray-500">Read contents of a file</p>
+                        </div>
+                    </label>
+                    <label class="flex items-start p-3 border border-gray-200 rounded-md hover:bg-gray-50 cursor-pointer">
+                        <input type="checkbox" checked class="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+                        <div class="ml-3">
+                            <span class="text-sm font-medium text-gray-900">write_file</span>
+                            <p class="text-xs text-gray-500">Write or update file contents</p>
+                        </div>
+                    </label>
+                    <label class="flex items-start p-3 border border-gray-200 rounded-md hover:bg-gray-50 cursor-pointer">
+                        <input type="checkbox" class="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+                        <div class="ml-3">
+                            <span class="text-sm font-medium text-gray-900">delete_file</span>
+                            <p class="text-xs text-gray-500">Delete a file from the system</p>
+                        </div>
+                    </label>
+                    <label class="flex items-start p-3 border border-gray-200 rounded-md hover:bg-gray-50 cursor-pointer">
+                        <input type="checkbox" checked class="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+                        <div class="ml-3">
+                            <span class="text-sm font-medium text-gray-900">list_directory</span>
+                            <p class="text-xs text-gray-500">List files in a directory</p>
+                        </div>
+                    </label>
+                    <label class="flex items-start p-3 border border-gray-200 rounded-md hover:bg-gray-50 cursor-pointer">
+                        <input type="checkbox" class="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+                        <div class="ml-3">
+                            <span class="text-sm font-medium text-gray-900">move_file</span>
+                            <p class="text-xs text-gray-500">Move or rename a file</p>
+                        </div>
+                    </label>
+                </div>
+            </div>
+            <div class="px-6 py-4 border-t border-gray-200 flex justify-end gap-3 bg-gray-50">
+                <button onclick="closeToolsModal()" class="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+                    Cancel
+                </button>
+                <button class="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">
+                    Save Configuration
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function openToolsModal(serverName) {
+            document.getElementById('modalServerName').textContent = serverName;
+            document.getElementById('toolsModal').classList.remove('hidden');
+        }
+
+        function closeToolsModal() {
+            document.getElementById('toolsModal').classList.add('hidden');
+        }
+
+        function logout() {
+            if (confirm('Are you sure you want to logout?')) {
+                window.location.href = 'login.html';
+            }
+        }
+
+        // Close modal on Escape key
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'Escape') {
+                closeToolsModal();
+            }
+        });
+
+        // Close modal when clicking outside
+        document.getElementById('toolsModal').addEventListener('click', function(event) {
+            if (event.target === this) {
+                closeToolsModal();
+            }
+        });
+    </script>
+</body>
+</html>

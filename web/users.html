@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MCP Gateway - User Management</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#2563eb',
+                        success: '#10b981',
+                        warning: '#f59e0b',
+                        danger: '#dc2626',
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-gray-50">
+    <!-- Navigation Header -->
+    <nav class="bg-white shadow-sm border-b border-gray-200">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex">
+                    <div class="flex-shrink-0 flex items-center">
+                        <h1 class="text-2xl font-bold text-blue-600">MCP Gateway</h1>
+                        <span class="ml-3 px-2 py-1 text-xs font-medium bg-purple-100 text-purple-800 rounded">Admin</span>
+                    </div>
+                    <div class="hidden sm:ml-6 sm:flex sm:space-x-8">
+                        <a href="index.html" class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
+                            Servers
+                        </a>
+                        <a href="users.html" class="border-blue-500 text-gray-900 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
+                            Users
+                        </a>
+                        <a href="#" class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
+                            Metrics
+                        </a>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <span class="text-sm text-gray-700">admin@example.com</span>
+                    <button onclick="logout()" class="text-sm text-gray-500 hover:text-gray-700">Logout</button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- User Management Section -->
+        <div class="bg-white rounded-lg shadow">
+            <!-- Header with Add Button -->
+            <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+                <div>
+                    <h2 class="text-xl font-semibold text-gray-900">User Management</h2>
+                    <p class="text-sm text-gray-500 mt-1">Manage users and their server access permissions</p>
+                </div>
+                <button onclick="openAddUserModal()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium inline-flex items-center">
+                    <svg class="h-5 w-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                    </svg>
+                    Add User
+                </button>
+            </div>
+
+            <!-- Users Table -->
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                User
+                            </th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Role
+                            </th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Assigned Servers
+                            </th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Status
+                            </th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Last Login
+                            </th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Actions
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-200">
+                        <!-- User 1 - Admin -->
+                        <tr class="hover:bg-gray-50">
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="flex items-center">
+                                    <div class="flex-shrink-0 h-10 w-10 bg-purple-100 rounded-full flex items-center justify-center">
+                                        <span class="text-purple-600 font-medium text-sm">AD</span>
+                                    </div>
+                                    <div class="ml-4">
+                                        <div class="text-sm font-medium text-gray-900">Admin User</div>
+                                        <div class="text-sm text-gray-500">admin@example.com</div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-purple-100 text-purple-800">
+                                    Admin
+                                </span>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                All Servers (12)
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                                    Active
+                                </span>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                Just now
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                <button class="text-blue-600 hover:text-blue-900 mr-3">Edit</button>
+                                <button class="text-gray-400" disabled>Delete</button>
+                            </td>
+                        </tr>
+
+                        <!-- User 2 - Viewer with servers -->
+                        <tr class="hover:bg-gray-50">
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="flex items-center">
+                                    <div class="flex-shrink-0 h-10 w-10 bg-green-100 rounded-full flex items-center justify-center">
+                                        <span class="text-green-600 font-medium text-sm">JD</span>
+                                    </div>
+                                    <div class="ml-4">
+                                        <div class="text-sm font-medium text-gray-900">John Doe</div>
+                                        <div class="text-sm text-gray-500">john.doe@example.com</div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                                    Viewer
+                                </span>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                <button onclick="openAssignServersModal('John Doe', 'john.doe@example.com')" class="text-blue-600 hover:text-blue-800">
+                                    3 servers
+                                </button>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                                    Active
+                                </span>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                10 mins ago
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                <button onclick="openEditUserModal('John Doe')" class="text-blue-600 hover:text-blue-900 mr-3">Edit</button>
+                                <button onclick="confirmDelete('John Doe')" class="text-red-600 hover:text-red-900">Delete</button>
+                            </td>
+                        </tr>
+
+                        <!-- User 3 - Viewer with no servers -->
+                        <tr class="hover:bg-gray-50">
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="flex items-center">
+                                    <div class="flex-shrink-0 h-10 w-10 bg-blue-100 rounded-full flex items-center justify-center">
+                                        <span class="text-blue-600 font-medium text-sm">JS</span>
+                                    </div>
+                                    <div class="ml-4">
+                                        <div class="text-sm font-medium text-gray-900">Jane Smith</div>
+                                        <div class="text-sm text-gray-500">jane.smith@example.com</div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                                    Viewer
+                                </span>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                <button onclick="openAssignServersModal('Jane Smith', 'jane.smith@example.com')" class="text-blue-600 hover:text-blue-800">
+                                    0 servers
+                                </button>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                                    Active
+                                </span>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                2 hours ago
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                <button onclick="openEditUserModal('Jane Smith')" class="text-blue-600 hover:text-blue-900 mr-3">Edit</button>
+                                <button onclick="confirmDelete('Jane Smith')" class="text-red-600 hover:text-red-900">Delete</button>
+                            </td>
+                        </tr>
+
+                        <!-- User 4 - Inactive Viewer -->
+                        <tr class="hover:bg-gray-50 opacity-75">
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="flex items-center">
+                                    <div class="flex-shrink-0 h-10 w-10 bg-gray-100 rounded-full flex items-center justify-center">
+                                        <span class="text-gray-600 font-medium text-sm">BJ</span>
+                                    </div>
+                                    <div class="ml-4">
+                                        <div class="text-sm font-medium text-gray-900">Bob Johnson</div>
+                                        <div class="text-sm text-gray-500">bob.johnson@example.com</div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                                    Viewer
+                                </span>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                <button onclick="openAssignServersModal('Bob Johnson', 'bob.johnson@example.com')" class="text-blue-600 hover:text-blue-800">
+                                    1 server
+                                </button>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">
+                                    Inactive
+                                </span>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                Never
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                <button onclick="openEditUserModal('Bob Johnson')" class="text-blue-600 hover:text-blue-900 mr-3">Edit</button>
+                                <button onclick="confirmDelete('Bob Johnson')" class="text-red-600 hover:text-red-900">Delete</button>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <!-- Add User Modal -->
+    <div id="addUserModal" class="hidden fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg shadow-xl max-w-lg w-full mx-4">
+            <div class="px-6 py-4 border-b border-gray-200">
+                <h3 class="text-lg font-medium text-gray-900">Add New User</h3>
+            </div>
+            <form class="px-6 py-4">
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Name</label>
+                        <input type="text" placeholder="Full Name" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Email</label>
+                        <input type="email" placeholder="user@example.com" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Password</label>
+                        <input type="password" placeholder="••••••••" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Role</label>
+                        <div class="space-y-2">
+                            <label class="inline-flex items-center mr-6">
+                                <input type="radio" name="user_role" value="viewer" checked class="form-radio h-4 w-4 text-blue-600">
+                                <span class="ml-2 text-sm text-gray-700">Viewer (limited access)</span>
+                            </label>
+                            <label class="inline-flex items-center">
+                                <input type="radio" name="user_role" value="admin" class="form-radio h-4 w-4 text-blue-600">
+                                <span class="ml-2 text-sm text-gray-700">Admin (full access)</span>
+                            </label>
+                        </div>
+                    </div>
+                    <div class="flex items-center">
+                        <input type="checkbox" checked class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+                        <label class="ml-2 block text-sm text-gray-900">
+                            Active (user can login)
+                        </label>
+                    </div>
+                </div>
+            </form>
+            <div class="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
+                <button onclick="closeAddUserModal()" class="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+                    Cancel
+                </button>
+                <button class="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">
+                    Create User
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Assign Servers Modal -->
+    <div id="assignServersModal" class="hidden fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div class="px-6 py-4 border-b border-gray-200">
+                <h3 class="text-lg font-medium text-gray-900">Assign Servers - <span id="assignUserName"></span></h3>
+                <p class="text-sm text-gray-500 mt-1" id="assignUserEmail"></p>
+            </div>
+            <div class="px-6 py-4">
+                <p class="text-sm text-gray-600 mb-4">Select which MCP servers this user can access:</p>
+
+                <!-- Servers List with Checkboxes -->
+                <div class="space-y-2">
+                    <label class="flex items-center p-3 border border-gray-200 rounded-md hover:bg-gray-50 cursor-pointer">
+                        <input type="checkbox" checked class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+                        <div class="ml-3 flex-1">
+                            <div class="flex items-center justify-between">
+                                <span class="text-sm font-medium text-gray-900">Filesystem Server</span>
+                                <span class="text-xs text-gray-500 bg-green-100 text-green-800 px-2 py-1 rounded">Healthy</span>
+                            </div>
+                            <p class="text-xs text-gray-500">http://localhost:9001</p>
+                        </div>
+                    </label>
+
+                    <label class="flex items-center p-3 border border-gray-200 rounded-md hover:bg-gray-50 cursor-pointer">
+                        <input type="checkbox" class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+                        <div class="ml-3 flex-1">
+                            <div class="flex items-center justify-between">
+                                <span class="text-sm font-medium text-gray-900">Database Tools</span>
+                                <span class="text-xs text-gray-500 bg-yellow-100 text-yellow-800 px-2 py-1 rounded">Degraded</span>
+                            </div>
+                            <p class="text-xs text-gray-500">http://db-tools:8080</p>
+                        </div>
+                    </label>
+
+                    <label class="flex items-center p-3 border border-gray-200 rounded-md hover:bg-gray-50 cursor-pointer">
+                        <input type="checkbox" class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+                        <div class="ml-3 flex-1">
+                            <div class="flex items-center justify-between">
+                                <span class="text-sm font-medium text-gray-900">API Gateway</span>
+                                <span class="text-xs text-gray-500 bg-red-100 text-red-800 px-2 py-1 rounded">Unhealthy</span>
+                            </div>
+                            <p class="text-xs text-gray-500">http://api-gateway:3000</p>
+                        </div>
+                    </label>
+
+                    <label class="flex items-center p-3 border border-gray-200 rounded-md hover:bg-gray-50 cursor-pointer">
+                        <input type="checkbox" checked class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+                        <div class="ml-3 flex-1">
+                            <div class="flex items-center justify-between">
+                                <span class="text-sm font-medium text-gray-900">Slack Integration</span>
+                                <span class="text-xs text-gray-500 bg-green-100 text-green-800 px-2 py-1 rounded">Healthy</span>
+                            </div>
+                            <p class="text-xs text-gray-500">http://slack-mcp:4000</p>
+                        </div>
+                    </label>
+
+                    <label class="flex items-center p-3 border border-gray-200 rounded-md hover:bg-gray-50 cursor-pointer">
+                        <input type="checkbox" checked class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+                        <div class="ml-3 flex-1">
+                            <div class="flex items-center justify-between">
+                                <span class="text-sm font-medium text-gray-900">GitHub Integration</span>
+                                <span class="text-xs text-gray-500 bg-green-100 text-green-800 px-2 py-1 rounded">Healthy</span>
+                            </div>
+                            <p class="text-xs text-gray-500">http://github-mcp:5000</p>
+                        </div>
+                    </label>
+                </div>
+            </div>
+            <div class="px-6 py-4 border-t border-gray-200 flex justify-end gap-3 bg-gray-50">
+                <button onclick="closeAssignServersModal()" class="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+                    Cancel
+                </button>
+                <button class="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">
+                    Save Assignments
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function openAddUserModal() {
+            document.getElementById('addUserModal').classList.remove('hidden');
+        }
+
+        function closeAddUserModal() {
+            document.getElementById('addUserModal').classList.add('hidden');
+        }
+
+        function openEditUserModal(userName) {
+            alert('Edit user: ' + userName + '\n(Mockup - similar to Add User modal with pre-filled data)');
+        }
+
+        function openAssignServersModal(userName, userEmail) {
+            document.getElementById('assignUserName').textContent = userName;
+            document.getElementById('assignUserEmail').textContent = userEmail;
+            document.getElementById('assignServersModal').classList.remove('hidden');
+        }
+
+        function closeAssignServersModal() {
+            document.getElementById('assignServersModal').classList.add('hidden');
+        }
+
+        function confirmDelete(userName) {
+            if (confirm('Are you sure you want to delete user: ' + userName + '?')) {
+                alert('User deleted (mockup)');
+            }
+        }
+
+        function logout() {
+            window.location.href = 'login.html';
+        }
+
+        // Close modals on Escape key
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'Escape') {
+                closeAddUserModal();
+                closeAssignServersModal();
+            }
+        });
+
+        // Close modals when clicking outside
+        window.addEventListener('click', function(event) {
+            const addModal = document.getElementById('addUserModal');
+            const assignModal = document.getElementById('assignServersModal');
+
+            if (event.target === addModal) {
+                closeAddUserModal();
+            }
+            if (event.target === assignModal) {
+                closeAssignServersModal();
+            }
+        });
+    </script>
+</body>
+</html>

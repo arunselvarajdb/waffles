@@ -1,0 +1,328 @@
+package repository
+
+import (
+	"context"
+	"fmt"
+	"time"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/waffles/mcp-gateway/internal/domain"
+	"github.com/waffles/mcp-gateway/pkg/logger"
+)
+
+// UserRepository handles user data persistence
+type UserRepository struct {
+	pool   *pgxpool.Pool
+	logger logger.Logger
+}
+
+// NewUserRepository creates a new user repository
+func NewUserRepository(pool *pgxpool.Pool, log logger.Logger) *UserRepository {
+	return &UserRepository{
+		pool:   pool,
+		logger: log,
+	}
+}
+
+// Create creates a new user
+func (r *UserRepository) Create(ctx context.Context, user *domain.User) error {
+	query := `
+		INSERT INTO users (email, password_hash, name, auth_provider, external_id, is_active)
+		VALUES ($1, $2, $3, $4, $5, $6)
+		RETURNING id, created_at, updated_at
+	`
+
+	err := r.pool.QueryRow(ctx, query,
+		user.Email,
+		user.PasswordHash,
+		user.Name,
+		user.AuthProvider,
+		user.ExternalID,
+		user.IsActive,
+	).Scan(&user.ID, &user.CreatedAt, &user.UpdatedAt)
+
+	if err != nil {
+		r.logger.Error().Err(err).Str("email", user.Email).Msg("Failed to create user")
+		return fmt.Errorf("failed to create user: %w", err)
+	}
+
+	r.logger.Info().
+		Str("user_id", user.ID).
+		Str("email", user.Email).
+		Msg("User created successfully")
+
+	return nil
+}
+
+// GetByID retrieves a user by ID
+func (r *UserRepository) GetByID(ctx context.Context, id string) (*domain.User, error) {
+	query := `
+		SELECT id, email, COALESCE(password_hash, ''), COALESCE(name, ''), COALESCE(auth_provider, 'local'), COALESCE(external_id, ''), is_active, created_at, updated_at
+		FROM users
+		WHERE id = $1
+	`
+
+	var user domain.User
+	err := r.pool.QueryRow(ctx, query, id).Scan(
+		&user.ID,
+		&user.Email,
+		&user.PasswordHash,
+		&user.Name,
+		&user.AuthProvider,
+		&user.ExternalID,
+		&user.IsActive,
+		&user.CreatedAt,
+		&user.UpdatedAt,
+	)
+
+	if err == pgx.ErrNoRows {
+		return nil, domain.ErrUserNotFound
+	}
+	if err != nil {
+		r.logger.Error().Err(err).Str("user_id", id).Msg("Failed to get user by ID")
+		return nil, fmt.Errorf("failed to get user: %w", err)
+	}
+
+	return &user, nil
+}
+
+// GetByEmail retrieves a user by email
+func (r *UserRepository) GetByEmail(ctx context.Context, email string) (*domain.User, error) {
+	query := `
+		SELECT id, email, COALESCE(password_hash, ''), COALESCE(name, ''), COALESCE(auth_provider, 'local'), COALESCE(external_id, ''), is_active, created_at, updated_at
+		FROM users
+		WHERE email = $1
+	`
+
+	var user domain.User
+	err := r.pool.QueryRow(ctx, query, email).Scan(
+		&user.ID,
+		&user.Email,
+		&user.PasswordHash,
+		&user.Name,
+		&user.AuthProvider,
+		&user.ExternalID,
+		&user.IsActive,
+		&user.CreatedAt,
+		&user.UpdatedAt,
+	)
+
+	if err == pgx.ErrNoRows {
+		return nil, domain.ErrUserNotFound
+	}
+	if err != nil {
+		r.logger.Error().Err(err).Str("email", email).Msg("Failed to get user by email")
+		return nil, fmt.Errorf("failed to get user by email: %w", err)
+	}
+
+	return &user, nil
+}
+
+// Update updates an existing user
+func (r *UserRepository) Update(ctx context.Context, user *domain.User) error {
+	query := `
+		UPDATE users
+		SET email = $1, name = $2, is_active = $3, updated_at = $4
+		WHERE id = $5
+		RETURNING updated_at
+	`
+
+	user.UpdatedAt = time.Now()
+	err := r.pool.QueryRow(ctx, query,
+		user.Email,
+		user.Name,
+		user.IsActive,
+		user.UpdatedAt,
+		user.ID,
+	).Scan(&user.UpdatedAt)
+
+	if err == pgx.ErrNoRows {
+		return domain.ErrUserNotFound
+	}
+	if err != nil {
+		r.logger.Error().Err(err).Str("user_id", user.ID).Msg("Failed to update user")
+		return fmt.Errorf("failed to update user: %w", err)
+	}
+
+	r.logger.Info().Str("user_id", user.ID).Msg("User updated successfully")
+	return nil
+}
+
+// UpdatePassword updates a user's password hash
+func (r *UserRepository) UpdatePassword(ctx context.Context, userID string, passwordHash string) error {
+	query := `
+		UPDATE users
+		SET password_hash = $1, updated_at = $2
+		WHERE id = $3
+	`
+
+	result, err := r.pool.Exec(ctx, query, passwordHash, time.Now(), userID)
+	if err != nil {
+		r.logger.Error().Err(err).Str("user_id", userID).Msg("Failed to update password")
+		return fmt.Errorf("failed to update password: %w", err)
+	}
+
+	if result.RowsAffected() == 0 {
+		return domain.ErrUserNotFound
+	}
+
+	r.logger.Info().Str("user_id", userID).Msg("User password updated")
+	return nil
+}
+
+// Delete deletes a user by ID
+func (r *UserRepository) Delete(ctx context.Context, id string) error {
+	query := `DELETE FROM users WHERE id = $1`
+
+	result, err := r.pool.Exec(ctx, query, id)
+	if err != nil {
+		r.logger.Error().Err(err).Str("user_id", id).Msg("Failed to delete user")
+		return fmt.Errorf("failed to delete user: %w", err)
+	}
+
+	if result.RowsAffected() == 0 {
+		return domain.ErrUserNotFound
+	}
+
+	r.logger.Info().Str("user_id", id).Msg("User deleted successfully")
+	return nil
+}
+
+// List retrieves all users with optional filtering
+func (r *UserRepository) List(ctx context.Context, limit, offset int) ([]*domain.User, int, error) {
+	// Get total count
+	countQuery := `SELECT COUNT(*) FROM users`
+	var total int
+	err := r.pool.QueryRow(ctx, countQuery).Scan(&total)
+	if err != nil {
+		r.logger.Error().Err(err).Msg("Failed to count users")
+		return nil, 0, fmt.Errorf("failed to count users: %w", err)
+	}
+
+	query := `
+		SELECT id, email, COALESCE(password_hash, ''), COALESCE(name, ''), COALESCE(auth_provider, 'local'), COALESCE(external_id, ''), is_active, created_at, updated_at
+		FROM users
+		ORDER BY created_at DESC
+		LIMIT $1 OFFSET $2
+	`
+
+	rows, err := r.pool.Query(ctx, query, limit, offset)
+	if err != nil {
+		r.logger.Error().Err(err).Msg("Failed to list users")
+		return nil, 0, fmt.Errorf("failed to list users: %w", err)
+	}
+	defer rows.Close()
+
+	var users []*domain.User
+	for rows.Next() {
+		var user domain.User
+		err := rows.Scan(
+			&user.ID,
+			&user.Email,
+			&user.PasswordHash,
+			&user.Name,
+			&user.AuthProvider,
+			&user.ExternalID,
+			&user.IsActive,
+			&user.CreatedAt,
+			&user.UpdatedAt,
+		)
+		if err != nil {
+			r.logger.Error().Err(err).Msg("Failed to scan user row")
+			continue
+		}
+		// Clear password hash for security
+		user.PasswordHash = ""
+		users = append(users, &user)
+	}
+
+	if err = rows.Err(); err != nil {
+		r.logger.Error().Err(err).Msg("Error iterating user rows")
+		return nil, 0, fmt.Errorf("error iterating users: %w", err)
+	}
+
+	r.logger.Debug().Int("count", len(users)).Msg("Users listed")
+	return users, total, nil
+}
+
+// GetUserRoles retrieves all role names for a user
+func (r *UserRepository) GetUserRoles(ctx context.Context, userID string) ([]string, error) {
+	query := `
+		SELECT r.name
+		FROM roles r
+		INNER JOIN user_roles ur ON r.id = ur.role_id
+		WHERE ur.user_id = $1
+	`
+
+	rows, err := r.pool.Query(ctx, query, userID)
+	if err != nil {
+		r.logger.Error().Err(err).Str("user_id", userID).Msg("Failed to get user roles")
+		return nil, fmt.Errorf("failed to get user roles: %w", err)
+	}
+	defer rows.Close()
+
+	var roles []string
+	for rows.Next() {
+		var role string
+		if err := rows.Scan(&role); err != nil {
+			r.logger.Error().Err(err).Msg("Failed to scan role")
+			continue
+		}
+		roles = append(roles, role)
+	}
+
+	return roles, nil
+}
+
+// AssignRole assigns a role to a user
+func (r *UserRepository) AssignRole(ctx context.Context, userID, roleName string) error {
+	query := `
+		INSERT INTO user_roles (user_id, role_id)
+		SELECT $1, id FROM roles WHERE name = $2
+		ON CONFLICT (user_id, role_id) DO NOTHING
+	`
+
+	_, err := r.pool.Exec(ctx, query, userID, roleName)
+	if err != nil {
+		r.logger.Error().Err(err).
+			Str("user_id", userID).
+			Str("role", roleName).
+			Msg("Failed to assign role")
+		return fmt.Errorf("failed to assign role: %w", err)
+	}
+
+	r.logger.Info().
+		Str("user_id", userID).
+		Str("role", roleName).
+		Msg("Role assigned successfully")
+	return nil
+}
+
+// RemoveRole removes a role from a user
+func (r *UserRepository) RemoveRole(ctx context.Context, userID, roleName string) error {
+	query := `
+		DELETE FROM user_roles
+		WHERE user_id = $1
+		AND role_id = (SELECT id FROM roles WHERE name = $2)
+	`
+
+	result, err := r.pool.Exec(ctx, query, userID, roleName)
+	if err != nil {
+		r.logger.Error().Err(err).
+			Str("user_id", userID).
+			Str("role", roleName).
+			Msg("Failed to remove role")
+		return fmt.Errorf("failed to remove role: %w", err)
+	}
+
+	if result.RowsAffected() == 0 {
+		return fmt.Errorf("role assignment not found")
+	}
+
+	r.logger.Info().
+		Str("user_id", userID).
+		Str("role", roleName).
+		Msg("Role removed successfully")
+	return nil
+}

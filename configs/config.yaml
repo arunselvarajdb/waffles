@@ -1,0 +1,51 @@
+# MCP Gateway - Default Configuration
+# All values can be overridden with environment variables
+
+server:
+  host: 0.0.0.0
+  port: 8080
+  read_timeout: 30s
+  write_timeout: 30s
+  shutdown_timeout: 10s
+  environment: development
+
+database:
+  host: localhost
+  port: 5432
+  user: postgres
+  password: postgres
+  database: mcp_gateway
+  max_open_conns: 25
+  max_idle_conns: 5
+  conn_max_lifetime: 5m
+  conn_max_idle_time: 1m
+
+redis:
+  host: localhost
+  port: 6379
+  password: ""
+  db: 0
+
+auth:
+  enabled: false # Set to true in production to require login
+  session_secret: dev-session-secret-change-in-production-32b
+  session_max_age: 24h
+  cookie_secure: false # Set to true in production (HTTPS only)
+  cookie_same_site: lax
+  jwt_secret: change-this-in-production
+  jwt_access_token_expiry: 15m
+  jwt_refresh_token_expiry: 168h # 7 days
+
+secrets:
+  provider: env # Use 'env' for local dev, 'aws' for production
+  aws:
+    region: us-east-1
+    secret_prefix: mcp-gateway
+
+logging:
+  level: info # debug, info, warn, error
+  format: json # json or console
+
+metrics:
+  enabled: true
+  prometheus_port: 9090
