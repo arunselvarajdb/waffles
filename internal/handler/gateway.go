@@ -12,7 +12,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/waffles/mcp-gateway/internal/domain"
+	"github.com/waffles/mcp-gateway/internal/handler/middleware"
 	"github.com/waffles/mcp-gateway/internal/service/gateway"
+	"github.com/waffles/mcp-gateway/internal/service/serveraccess"
 	"github.com/waffles/mcp-gateway/pkg/logger"
 )
 
@@ -59,15 +61,17 @@ type ToolCallParams struct {
 
 // GatewayHandler handles MCP gateway requests
 type GatewayHandler struct {
-	service *gateway.Service
-	logger  logger.Logger
+	service       *gateway.Service
+	accessService *serveraccess.Service
+	logger        logger.Logger
 }
 
 // NewGatewayHandler creates a new gateway handler
-func NewGatewayHandler(service *gateway.Service, log logger.Logger) *GatewayHandler {
+func NewGatewayHandler(service *gateway.Service, accessService *serveraccess.Service, log logger.Logger) *GatewayHandler {
 	return &GatewayHandler{
-		service: service,
-		logger:  log,
+		service:       service,
+		accessService: accessService,
+		logger:        log,
 	}
 }
 
@@ -113,6 +117,26 @@ func (h *GatewayHandler) MCPProxy(c *gin.Context) {
 		Str("content_type", c.GetHeader("Content-Type")).
 		Str("accept", c.GetHeader("Accept")).
 		Msg("MCP Proxy request received")
+
+	// Check execute-level access if access service is configured
+	if h.accessService != nil {
+		roles := middleware.GetUserRoles(c)
+		canExecute, err := h.accessService.CanAccessServer(c.Request.Context(), roles, serverID, domain.AccessLevelExecute)
+		if err != nil {
+			h.logger.Error().Err(err).Str("server_id", serverID).Any("roles", roles).Msg("Failed to check server execute access")
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": "Failed to check server access",
+			})
+			return
+		}
+		if !canExecute {
+			h.logger.Warn().Str("server_id", serverID).Any("roles", roles).Msg("Execute access denied to server")
+			c.JSON(http.StatusForbidden, gin.H{
+				"error": "You don't have execute permission for this server",
+			})
+			return
+		}
+	}
 
 	// Get the server info to check allowed tools
 	server, err := h.service.GetServerInfo(c.Request.Context(), serverID)

@@ -7,6 +7,9 @@ import (
 
 // Common domain errors
 var (
+	// Generic errors
+	ErrNotFound = errors.New("not found")
+
 	// User errors
 	ErrUserNotFound      = errors.New("user not found")
 	ErrUserAlreadyExists = errors.New("user already exists")

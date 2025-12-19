@@ -1,7 +1,7 @@
 version: '3.8'
 
 services:
-  # PostgreSQL Database
+  # PostgreSQL Database for MCP Gateway
   postgres:
     image: postgres:15-alpine
     container_name: mcp-gateway-db
@@ -38,6 +38,14 @@ services:
       LOGGING_FORMAT: json
       SERVER_PORT: 8080
       SERVER_ENVIRONMENT: development
+      # SSO/OIDC Configuration (loaded from .env)
+      AUTH_OAUTH_ENABLED: ${AUTH_OAUTH_ENABLED:-false}
+      AUTH_OAUTH_BASE_URL: ${AUTH_OAUTH_BASE_URL:-http://localhost:8080}
+      AUTH_OAUTH_ISSUER: ${AUTH_OAUTH_ISSUER:-}
+      AUTH_OAUTH_CLIENT_ID: ${AUTH_OAUTH_CLIENT_ID:-}
+      AUTH_OAUTH_CLIENT_SECRET: ${AUTH_OAUTH_CLIENT_SECRET:-}
+      AUTH_OAUTH_DEFAULT_ROLE: ${AUTH_OAUTH_DEFAULT_ROLE:-viewer}
+      AUTH_OAUTH_AUTO_CREATE_USERS: ${AUTH_OAUTH_AUTO_CREATE_USERS:-true}
     ports:
       - "8080:8080"
       - "9090:9090"  # Prometheus metrics endpoint
@@ -46,6 +54,8 @@ services:
         condition: service_healthy
     networks:
       - mcp-network
+    extra_hosts:
+      - "localhost:host-gateway"
     restart: unless-stopped
 
   # Mock MCP Server (for testing)

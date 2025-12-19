@@ -62,7 +62,7 @@ func (r *AuditRepository) Get(ctx context.Context, id string) (*domain.AuditLog,
 		SELECT
 			id, user_id, server_id, request_id, method, path,
 			query_params, request_body, response_status, response_body,
-			latency_ms, ip_address, user_agent, error_message, created_at
+			latency_ms, ip_address::TEXT, user_agent, error_message, created_at
 		FROM audit_logs
 		WHERE id = $1
 	`
@@ -99,7 +99,7 @@ func (r *AuditRepository) List(ctx context.Context, filter domain.AuditLogFilter
 		SELECT
 			id, user_id, server_id, request_id, method, path,
 			query_params, request_body, response_status, response_body,
-			latency_ms, ip_address, user_agent, error_message, created_at
+			latency_ms, ip_address::TEXT, user_agent, error_message, created_at
 		FROM audit_logs
 		WHERE 1=1
 	`

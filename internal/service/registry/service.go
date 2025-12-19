@@ -79,6 +79,23 @@ func (s *Service) ListServers(ctx context.Context, filter *domain.ServerFilter) 
 	return servers, nil
 }
 
+// ListServersForUser retrieves MCP servers filtered by accessible server IDs
+// If accessibleServerIDs is nil, returns all servers (admin bypass)
+// If accessibleServerIDs is empty slice, returns no servers
+// Otherwise, filters servers by the provided IDs
+func (s *Service) ListServersForUser(ctx context.Context, filter *domain.ServerFilter, accessibleServerIDs []string) ([]*domain.MCPServer, error) {
+	servers, err := s.repo.ListForUser(ctx, filter, accessibleServerIDs)
+	if err != nil {
+		return nil, err
+	}
+
+	s.logger.Debug().
+		Int("count", len(servers)).
+		Bool("filtered", accessibleServerIDs != nil).
+		Msg("Servers listed for user")
+	return servers, nil
+}
+
 // GetServer retrieves a single MCP server by ID
 func (s *Service) GetServer(ctx context.Context, id string) (*domain.MCPServer, error) {
 	server, err := s.repo.Get(ctx, id)

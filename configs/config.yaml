@@ -27,7 +27,7 @@ redis:
   db: 0
 
 auth:
-  enabled: false # Set to true in production to require login
+  enabled: true # Set to true in production to require login
   session_secret: dev-session-secret-change-in-production-32b
   session_max_age: 24h
   cookie_secure: false # Set to true in production (HTTPS only)
@@ -35,6 +35,37 @@ auth:
   jwt_secret: change-this-in-production
   jwt_access_token_expiry: 15m
   jwt_refresh_token_expiry: 168h # 7 days
+  # Resource RBAC - when enabled, users only see servers in namespaces their role has access to
+  # When disabled (default), all authenticated users see all servers
+  resource_rbac_enabled: true
+
+  # SSO/OIDC Configuration
+  # Works with any OIDC-compliant provider (Authentik, Keycloak, Okta, Auth0, Azure AD, etc.)
+  oauth:
+    enabled: false # Set to true to enable SSO login
+    base_url: http://localhost:8080 # Base URL for SSO callbacks (your MCP Gateway URL)
+    default_role: viewer # Default role for new SSO users
+    auto_create_users: true # Create users on first SSO login
+
+    # OIDC Provider Configuration
+    # Set redirect URI in your provider to: {base_url}/api/v1/auth/sso/callback
+    #
+    # Example issuer URLs for common providers:
+    #   Authentik:  https://auth.example.com/application/o/mcp-gateway/
+    #   Keycloak:   https://auth.example.com/realms/myrealm
+    #   Okta:       https://mycompany.okta.com/oauth2/default
+    #   Auth0:      https://mycompany.auth0.com/
+    #   Azure AD:   https://login.microsoftonline.com/{tenant-id}/v2.0
+    #   Google:     https://accounts.google.com
+    #
+    issuer: "" # OIDC issuer URL (provider's .well-known/openid-configuration endpoint base)
+    client_id: "" # OAuth client ID from your provider
+    client_secret: "" # OAuth client secret from your provider
+    scopes: # OIDC scopes to request
+      - openid
+      - email
+      - profile
+    allowed_domains: [] # Optional: restrict to specific email domains, e.g., ["example.com"]
 
 secrets:
   provider: env # Use 'env' for local dev, 'aws' for production

@@ -6,7 +6,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/waffles/mcp-gateway/internal/domain"
+	"github.com/waffles/mcp-gateway/internal/handler/middleware"
 	"github.com/waffles/mcp-gateway/internal/service/registry"
+	"github.com/waffles/mcp-gateway/internal/service/serveraccess"
 	"github.com/waffles/mcp-gateway/pkg/logger"
 )
 
@@ -14,15 +16,17 @@ import (
 
 // RegistryHandler handles HTTP requests for MCP server registry
 type RegistryHandler struct {
-	service *registry.Service
-	logger  logger.Logger
+	service       *registry.Service
+	accessService *serveraccess.Service
+	logger        logger.Logger
 }
 
 // NewRegistryHandler creates a new registry handler
-func NewRegistryHandler(service *registry.Service, log logger.Logger) *RegistryHandler {
+func NewRegistryHandler(service *registry.Service, accessService *serveraccess.Service, log logger.Logger) *RegistryHandler {
 	return &RegistryHandler{
-		service: service,
-		logger:  log,
+		service:       service,
+		accessService: accessService,
+		logger:        log,
 	}
 }
 
@@ -75,8 +79,25 @@ func (h *RegistryHandler) ListServers(c *gin.Context) {
 		filter.Offset = offset
 	}
 
-	// Call service
-	servers, err := h.service.ListServers(c.Request.Context(), filter)
+	// Get user's roles for access filtering
+	roles := middleware.GetUserRoles(c)
+
+	// Get accessible server IDs (nil = admin, all servers; empty = no access; list = filtered)
+	var accessibleServerIDs []string
+	var err error
+	if h.accessService != nil {
+		accessibleServerIDs, err = h.accessService.GetAccessibleServerIDs(c.Request.Context(), roles, domain.AccessLevelView)
+		if err != nil {
+			h.logger.Error().Err(err).Any("roles", roles).Msg("Failed to get accessible servers")
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": "Failed to check server access",
+			})
+			return
+		}
+	}
+
+	// Call service with access filter
+	servers, err := h.service.ListServersForUser(c.Request.Context(), filter, accessibleServerIDs)
 	if err != nil {
 		h.logger.Error().Err(err).Msg("Failed to list servers")
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -123,6 +144,25 @@ func (h *RegistryHandler) GetServer(c *gin.Context) {
 			"error": "Server ID is required",
 		})
 		return
+	}
+
+	// Check access if access service is configured
+	if h.accessService != nil {
+		roles := middleware.GetUserRoles(c)
+		canAccess, err := h.accessService.CanAccessServer(c.Request.Context(), roles, id, domain.AccessLevelView)
+		if err != nil {
+			h.logger.Error().Err(err).Str("server_id", id).Any("roles", roles).Msg("Failed to check server access")
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": "Failed to check server access",
+			})
+			return
+		}
+		if !canAccess {
+			c.JSON(http.StatusForbidden, gin.H{
+				"error": "Access denied to this server",
+			})
+			return
+		}
 	}
 
 	server, err := h.service.GetServer(c.Request.Context(), id)

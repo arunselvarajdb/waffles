@@ -5,6 +5,7 @@ import AdminDashboard from '@/views/AdminDashboard.vue'
 import UserManagement from '@/views/UserManagement.vue'
 import ServerInspector from '@/views/ServerInspector.vue'
 import ViewerDashboard from '@/views/ViewerDashboard.vue'
+import NamespacesDashboard from '@/views/NamespacesDashboard.vue'
 
 const routes = [
   {
@@ -27,6 +28,12 @@ const routes = [
     path: '/admin/users',
     name: 'UserManagement',
     component: UserManagement,
+    meta: { requiresAuth: true, requiresAdmin: true }
+  },
+  {
+    path: '/admin/namespaces',
+    name: 'NamespacesDashboard',
+    component: NamespacesDashboard,
     meta: { requiresAuth: true, requiresAdmin: true }
   },
   {
@@ -73,6 +80,13 @@ router.beforeEach(async (to, from, next) => {
 
   // Route requires authentication
   if (to.meta.requiresAuth) {
+    // If not authenticated in local state, try to verify with server
+    // This handles SSO login where the session cookie exists but localStorage doesn't have the state
+    if (!authStore.isAuthenticated) {
+      await authStore.checkAuth()
+    }
+
+    // Still not authenticated after checking with server
     if (!authStore.isAuthenticated) {
       // Store the intended destination
       sessionStorage.setItem('redirectAfterLogin', to.fullPath)

@@ -103,17 +103,45 @@ export const useAuthStore = defineStore('auth', {
       }
     },
 
-    // Mock login for demo (no real auth)
-    loginAsAdmin() {
-      this.user = { id: 'demo-admin', name: 'Admin User', email: 'admin@example.com' }
-      this.roles = ['admin']
-      this.isAuthenticated = true
+    // Demo login - actually authenticate with backend using test credentials
+    async loginAsAdmin() {
+      try {
+        const response = await api.post('/auth/login', {
+          email: 'admin@example.com',
+          password: 'admin123'
+        })
+        this.user = response.user
+        this.roles = response.user.roles || ['admin']
+        this.isAuthenticated = true
+        return true
+      } catch (error) {
+        // Fallback to mock if backend auth fails
+        console.warn('Backend admin login failed, using mock:', error)
+        this.user = { id: 'demo-admin', name: 'Admin User', email: 'admin@example.com' }
+        this.roles = ['admin']
+        this.isAuthenticated = true
+        return false
+      }
     },
 
-    loginAsViewer() {
-      this.user = { id: 'demo-viewer', name: 'Viewer User', email: 'viewer@example.com' }
-      this.roles = ['viewer']
-      this.isAuthenticated = true
+    async loginAsViewer() {
+      try {
+        const response = await api.post('/auth/login', {
+          email: 'viewer@example.com',
+          password: 'viewer123'
+        })
+        this.user = response.user
+        this.roles = response.user.roles || ['viewer']
+        this.isAuthenticated = true
+        return true
+      } catch (error) {
+        // Fallback to mock if backend auth fails
+        console.warn('Backend viewer login failed, using mock:', error)
+        this.user = { id: 'demo-viewer', name: 'Viewer User', email: 'viewer@example.com' }
+        this.roles = ['viewer']
+        this.isAuthenticated = true
+        return false
+      }
     },
 
     // Clear any errors

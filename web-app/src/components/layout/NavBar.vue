@@ -34,18 +34,19 @@
             >
               Users
             </router-link>
-            <a
-              href="#"
-              class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium"
+            <router-link
+              to="/admin/namespaces"
+              class="border-transparent hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium"
+              :class="isActive('/admin/namespaces') ? 'border-blue-500 text-gray-900' : 'text-gray-500'"
             >
-              Metrics
-            </a>
+              Namespaces
+            </router-link>
           </div>
         </div>
 
         <!-- Right side: User Info and Logout -->
-        <div class="flex items-center space-x-4">
-          <span v-if="userEmail" class="text-sm text-gray-700">{{ userEmail }}</span>
+        <div class="flex-shrink-0 flex items-center space-x-4">
+          <span v-if="userEmail" class="text-sm text-gray-700 whitespace-nowrap">{{ userEmail }}</span>
           <button
             @click="handleLogout"
             class="text-sm text-gray-500 hover:text-gray-700 transition-colors"
@@ -80,8 +81,8 @@ const isActive = (path) => {
   return route.path === path
 }
 
-const handleLogout = () => {
-  authStore.logout()
+const handleLogout = async () => {
+  await authStore.logout()
   router.push('/login')
 }
 </script>

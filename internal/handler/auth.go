@@ -147,7 +147,12 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 
 	// Clear session
 	session.Clear()
-	session.Options(sessions.Options{MaxAge: -1}) // Delete cookie
+	// Must include Path to match the original cookie settings, otherwise cookie won't be deleted
+	session.Options(sessions.Options{
+		Path:     "/",
+		MaxAge:   -1,
+		HttpOnly: true,
+	})
 	if err := session.Save(); err != nil {
 		h.logger.Error().Err(err).Msg("Failed to clear session")
 	}

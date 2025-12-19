@@ -326,3 +326,106 @@ func (r *UserRepository) RemoveRole(ctx context.Context, userID, roleName string
 		Msg("Role removed successfully")
 	return nil
 }
+
+// GetByExternalID retrieves a user by their OAuth provider and external ID
+func (r *UserRepository) GetByExternalID(ctx context.Context, provider, externalID string) (*domain.User, error) {
+	query := `
+		SELECT id, email, COALESCE(password_hash, ''), COALESCE(name, ''), COALESCE(auth_provider, 'local'), COALESCE(external_id, ''), is_active, created_at, updated_at
+		FROM users
+		WHERE auth_provider = $1 AND external_id = $2
+	`
+
+	var user domain.User
+	err := r.pool.QueryRow(ctx, query, provider, externalID).Scan(
+		&user.ID,
+		&user.Email,
+		&user.PasswordHash,
+		&user.Name,
+		&user.AuthProvider,
+		&user.ExternalID,
+		&user.IsActive,
+		&user.CreatedAt,
+		&user.UpdatedAt,
+	)
+
+	if err == pgx.ErrNoRows {
+		return nil, domain.ErrUserNotFound
+	}
+	if err != nil {
+		r.logger.Error().Err(err).
+			Str("provider", provider).
+			Str("external_id", externalID).
+			Msg("Failed to get user by external ID")
+		return nil, fmt.Errorf("failed to get user by external ID: %w", err)
+	}
+
+	return &user, nil
+}
+
+// FindOrCreateOAuthUser finds a user by OAuth provider/external ID, or creates a new one
+func (r *UserRepository) FindOrCreateOAuthUser(ctx context.Context, provider, externalID, email, name string) (*domain.User, bool, error) {
+	// First, try to find by external ID
+	user, err := r.GetByExternalID(ctx, provider, externalID)
+	if err == nil {
+		return user, false, nil // Existing user
+	}
+	if err != domain.ErrUserNotFound {
+		return nil, false, err
+	}
+
+	// Not found by external ID, check if email exists
+	existingUser, err := r.GetByEmail(ctx, email)
+	if err == nil {
+		// Email exists - update this user to link OAuth provider
+		updateQuery := `
+			UPDATE users
+			SET auth_provider = $1, external_id = $2, name = COALESCE(NULLIF($3, ''), name), updated_at = $4
+			WHERE id = $5
+			RETURNING updated_at
+		`
+		existingUser.AuthProvider = domain.AuthProvider(provider)
+		existingUser.ExternalID = externalID
+		if name != "" {
+			existingUser.Name = name
+		}
+		existingUser.UpdatedAt = time.Now()
+
+		err = r.pool.QueryRow(ctx, updateQuery,
+			provider, externalID, name, existingUser.UpdatedAt, existingUser.ID,
+		).Scan(&existingUser.UpdatedAt)
+		if err != nil {
+			r.logger.Error().Err(err).Str("user_id", existingUser.ID).Msg("Failed to link OAuth to existing user")
+			return nil, false, fmt.Errorf("failed to link OAuth: %w", err)
+		}
+
+		r.logger.Info().
+			Str("user_id", existingUser.ID).
+			Str("provider", provider).
+			Msg("Linked OAuth provider to existing user")
+		return existingUser, false, nil
+	}
+	if err != domain.ErrUserNotFound {
+		return nil, false, err
+	}
+
+	// Create new user
+	newUser := &domain.User{
+		Email:        email,
+		Name:         name,
+		AuthProvider: domain.AuthProvider(provider),
+		ExternalID:   externalID,
+		IsActive:     true,
+	}
+
+	if err := r.Create(ctx, newUser); err != nil {
+		return nil, false, err
+	}
+
+	r.logger.Info().
+		Str("user_id", newUser.ID).
+		Str("email", email).
+		Str("provider", provider).
+		Msg("Created new OAuth user")
+
+	return newUser, true, nil
+}

@@ -40,12 +40,35 @@ func setupTestDB(t *testing.T) *pgxpool.Pool {
 	return pool
 }
 
+// createTestServer creates a test MCP server and returns its ID for use in audit log tests
+func createTestServer(t *testing.T, pool *pgxpool.Pool) string {
+	var serverID string
+	err := pool.QueryRow(context.Background(), `
+		INSERT INTO mcp_servers (name, url, is_active)
+		VALUES ($1, $2, true)
+		ON CONFLICT (name) DO UPDATE SET url = $2
+		RETURNING id
+	`, "test-audit-server-"+t.Name(), "http://localhost:8000").Scan(&serverID)
+	require.NoError(t, err)
+	return serverID
+}
+
+// cleanupTestServer removes the test server created for audit tests
+func cleanupTestServer(t *testing.T, pool *pgxpool.Pool, serverID string) {
+	_, err := pool.Exec(context.Background(), "DELETE FROM mcp_servers WHERE id = $1", serverID)
+	require.NoError(t, err)
+}
+
 func TestAuditRepository_Create(t *testing.T) {
 	pool := setupTestDB(t)
 	defer pool.Close()
 
 	repo := NewAuditRepository(pool)
 	ctx := context.Background()
+
+	// Create a test server for the server ID test case
+	testServerID := createTestServer(t, pool)
+	defer cleanupTestServer(t, pool, testServerID)
 
 	tests := []struct {
 		name    string
@@ -66,11 +89,11 @@ func TestAuditRepository_Create(t *testing.T) {
 		{
 			name: "create full audit log",
 			log: &domain.AuditLog{
-				RequestID: "req-456",
-				Method:    "POST",
-				Path:      "/api/v1/gateway/server-123/tools/call",
-				QueryParams: json.RawMessage(`{"filter":"calc"}`),
-				RequestBody: json.RawMessage(`{"name":"calculator","args":{"a":1,"b":2}}`),
+				RequestID:      "req-456",
+				Method:         "POST",
+				Path:           "/api/v1/gateway/server-123/tools/call",
+				QueryParams:    json.RawMessage(`{"filter":"calc"}`),
+				RequestBody:    json.RawMessage(`{"name":"calculator","args":{"a":1,"b":2}}`),
 				ResponseStatus: intPtr(200),
 				ResponseBody:   json.RawMessage(`{"result":3}`),
 				LatencyMS:      intPtr(45),
@@ -83,9 +106,9 @@ func TestAuditRepository_Create(t *testing.T) {
 			name: "create with server ID",
 			log: &domain.AuditLog{
 				RequestID: "req-789",
-				ServerID:  stringPtr("server-abc"),
+				ServerID:  &testServerID, // Use a valid server ID from the database
 				Method:    "POST",
-				Path:      "/api/v1/gateway/server-abc/tools/list",
+				Path:      "/api/v1/gateway/" + testServerID + "/tools/list",
 				IPAddress: "127.0.0.1",
 				UserAgent: "test-client",
 			},
@@ -172,8 +195,11 @@ func TestAuditRepository_List(t *testing.T) {
 	repo := NewAuditRepository(pool)
 	ctx := context.Background()
 
+	// Create a test server for the server ID test case
+	serverID := createTestServer(t, pool)
+	defer cleanupTestServer(t, pool, serverID)
+
 	// Create multiple test logs
-	serverID := "server-123"
 	logs := []*domain.AuditLog{
 		{
 			RequestID: "req-1",
@@ -187,7 +213,7 @@ func TestAuditRepository_List(t *testing.T) {
 			RequestID: "req-2",
 			ServerID:  &serverID,
 			Method:    "POST",
-			Path:      "/api/v1/gateway/server-123/tools/call",
+			Path:      "/api/v1/gateway/" + serverID + "/tools/call",
 			IPAddress: "127.0.0.1",
 			UserAgent: "curl",
 		},

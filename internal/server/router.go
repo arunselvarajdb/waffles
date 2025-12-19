@@ -17,7 +17,9 @@ import (
 	"github.com/waffles/mcp-gateway/internal/service/audit"
 	"github.com/waffles/mcp-gateway/internal/service/authz"
 	"github.com/waffles/mcp-gateway/internal/service/gateway"
+	"github.com/waffles/mcp-gateway/internal/service/oauth"
 	"github.com/waffles/mcp-gateway/internal/service/registry"
+	"github.com/waffles/mcp-gateway/internal/service/serveraccess"
 )
 
 // SetupRoutes configures all routes for the server
@@ -49,11 +51,23 @@ func (s *Server) SetupRoutes() {
 	auditRepo := repository.NewAuditRepository(s.db.Pool)
 	userRepo := repository.NewUserRepository(s.db.Pool, s.logger)
 	apiKeyRepo := repository.NewAPIKeyRepository(s.db.Pool, s.logger)
+	namespaceRepo := repository.NewNamespaceRepository(s.db.Pool, s.logger)
 
 	// Initialize services
 	registryService := registry.NewService(serverRepo, s.logger)
 	gatewayService := gateway.NewService(serverRepo, s.logger, s.metrics)
 	auditService := audit.NewService(auditRepo, s.logger)
+
+	// Initialize server access service only if RBAC is enabled
+	// Support both new resource_rbac_enabled and legacy server_group_rbac_enabled
+	var accessService *serveraccess.Service
+	resourceRBACEnabled := s.config.Auth.ResourceRBACEnabled || s.config.Auth.ServerGroupRBACEnabled
+	if resourceRBACEnabled {
+		accessService = serveraccess.NewService(namespaceRepo, s.logger)
+		s.logger.Info().Msg("Resource RBAC is ENABLED - users will only see servers they have access to")
+	} else {
+		s.logger.Info().Msg("Resource RBAC is DISABLED - all authenticated users see all servers")
+	}
 
 	// Initialize Casbin for authorization
 	casbinService, err := authz.NewCasbinServiceWithDefaults(s.logger)
@@ -61,11 +75,22 @@ func (s *Server) SetupRoutes() {
 		s.logger.Error().Err(err).Msg("Failed to initialize Casbin, using permissive mode")
 	}
 
+	// Initialize OAuth service (if enabled)
+	oauthService := oauth.NewService(s.config.Auth.OAuth, s.logger)
+
+	// Determine frontend URL for OAuth redirects
+	frontendURL := s.config.Auth.OAuth.BaseURL
+	if frontendURL == "" {
+		frontendURL = "http://localhost:5173" // Default for development
+	}
+
 	// Initialize handlers
-	registryHandler := handler.NewRegistryHandler(registryService, s.logger)
-	gatewayHandler := handler.NewGatewayHandler(gatewayService, s.logger)
+	registryHandler := handler.NewRegistryHandler(registryService, accessService, s.logger)
+	gatewayHandler := handler.NewGatewayHandler(gatewayService, accessService, s.logger)
 	authHandler := handler.NewAuthHandler(userRepo, s.logger)
+	oauthHandler := handler.NewOAuthHandler(oauthService, userRepo, s.logger, frontendURL)
 	apiKeyHandler := handler.NewAPIKeyHandler(apiKeyRepo, s.logger)
+	namespaceHandler := handler.NewNamespaceHandler(namespaceRepo, s.logger)
 
 	// Auth middleware config
 	authConfig := &middleware.AuthConfig{
@@ -95,6 +120,11 @@ func (s *Server) SetupRoutes() {
 		{
 			auth.POST("/login", authHandler.Login)
 			auth.POST("/logout", authHandler.Logout)
+
+			// SSO routes (public - they handle their own authentication)
+			auth.GET("/sso/status", oauthHandler.GetSSOStatus)
+			auth.GET("/sso", oauthHandler.Authorize)
+			auth.GET("/sso/callback", oauthHandler.Callback)
 		}
 
 		// Status endpoint (public) - includes auth config for frontend
@@ -106,6 +136,9 @@ func (s *Server) SetupRoutes() {
 				},
 				"auth": gin.H{
 					"enabled": authEnabled,
+					"sso": gin.H{
+						"enabled": oauthService.IsEnabled(),
+					},
 				},
 			})
 		})
@@ -167,6 +200,29 @@ func (s *Server) SetupRoutes() {
 				gatewayGroup.POST("/:server_id/prompts/list", gatewayHandler.ListPrompts)
 				gatewayGroup.POST("/:server_id/prompts/get", gatewayHandler.GetPrompt)
 			}
+
+			// Namespaces routes (admin and operator can view, admin only can modify)
+			namespaces := protected.Group("/namespaces")
+			if authEnabled && authzConfig != nil {
+				namespaces.Use(middleware.Authz(authzConfig))
+			}
+			{
+				namespaces.GET("", namespaceHandler.ListNamespaces)
+				namespaces.POST("", namespaceHandler.CreateNamespace)
+				namespaces.GET("/:id", namespaceHandler.GetNamespace)
+				namespaces.PUT("/:id", namespaceHandler.UpdateNamespace)
+				namespaces.DELETE("/:id", namespaceHandler.DeleteNamespace)
+
+				// Server membership management
+				namespaces.GET("/:id/servers", namespaceHandler.ListServers)
+				namespaces.POST("/:id/servers", namespaceHandler.AddServer)
+				namespaces.DELETE("/:id/servers/:server_id", namespaceHandler.RemoveServer)
+
+				// Role access management
+				namespaces.GET("/:id/access", namespaceHandler.ListRoleAccess)
+				namespaces.POST("/:id/access", namespaceHandler.SetRoleAccess)
+				namespaces.DELETE("/:id/access/:role_id", namespaceHandler.RemoveRoleAccess)
+			}
 		}
 	}
 
@@ -180,7 +236,7 @@ func (s *Server) SetupRoutes() {
 	// Serve Vue.js application (SPA)
 	s.setupStaticFileServing()
 
-	s.logger.Info().Bool("auth_enabled", authEnabled).Msg("Routes configured successfully")
+	s.logger.Info().Bool("auth_enabled", authEnabled).Bool("resource_rbac_enabled", resourceRBACEnabled).Msg("Routes configured successfully")
 }
 
 // setupSessionStore creates and configures the session store

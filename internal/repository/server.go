@@ -368,3 +368,104 @@ func (r *ServerRepository) SaveHealthStatus(ctx context.Context, health *domain.
 
 	return nil
 }
+
+// ListForUser retrieves MCP servers filtered by accessible server IDs
+// If accessibleServerIDs is nil, returns all servers (admin bypass)
+// If accessibleServerIDs is empty slice, returns no servers
+// Otherwise, filters servers by the provided IDs
+func (r *ServerRepository) ListForUser(ctx context.Context, filter *domain.ServerFilter, accessibleServerIDs []string) ([]*domain.MCPServer, error) {
+	query := `
+		SELECT
+			id, name, description, url, protocol_version, transport,
+			auth_type, auth_config, health_check_url, health_check_interval,
+			timeout_seconds, max_connections, is_active, tags, allowed_tools, metadata,
+			created_at, updated_at
+		FROM mcp_servers
+		WHERE 1=1
+	`
+	args := make([]interface{}, 0)
+	argPos := 1
+
+	// If accessibleServerIDs is not nil, filter by those IDs
+	// nil means admin access (all servers)
+	// empty slice means no access (no servers)
+	if accessibleServerIDs != nil {
+		if len(accessibleServerIDs) == 0 {
+			// No accessible servers - return empty result
+			r.logger.Debug().Msg("No accessible servers for user")
+			return []*domain.MCPServer{}, nil
+		}
+		query += fmt.Sprintf(" AND id = ANY($%d)", argPos)
+		args = append(args, accessibleServerIDs)
+		argPos++
+	}
+
+	// Apply additional filters
+	if filter != nil {
+		if filter.Name != "" {
+			query += fmt.Sprintf(" AND name ILIKE $%d", argPos)
+			args = append(args, "%"+filter.Name+"%")
+			argPos++
+		}
+		if filter.IsActive != nil {
+			query += fmt.Sprintf(" AND is_active = $%d", argPos)
+			args = append(args, *filter.IsActive)
+			argPos++
+		}
+		if len(filter.Tags) > 0 {
+			query += fmt.Sprintf(" AND tags && $%d", argPos)
+			args = append(args, filter.Tags)
+			argPos++
+		}
+	}
+
+	// Default ordering
+	query += " ORDER BY created_at DESC"
+
+	// Apply limit and offset
+	if filter != nil {
+		if filter.Limit > 0 {
+			query += fmt.Sprintf(" LIMIT $%d", argPos)
+			args = append(args, filter.Limit)
+			argPos++
+		}
+		if filter.Offset > 0 {
+			query += fmt.Sprintf(" OFFSET $%d", argPos)
+			args = append(args, filter.Offset)
+		}
+	}
+
+	rows, err := r.pool.Query(ctx, query, args...)
+	if err != nil {
+		r.logger.Error().Err(err).Msg("Failed to list servers for user")
+		return nil, fmt.Errorf("failed to list servers for user: %w", err)
+	}
+	defer rows.Close()
+
+	var servers []*domain.MCPServer
+	for rows.Next() {
+		var s domain.MCPServer
+		err := rows.Scan(
+			&s.ID, &s.Name, &s.Description, &s.URL, &s.ProtocolVersion, &s.Transport,
+			&s.AuthType, &s.AuthConfig, &s.HealthCheckURL, &s.HealthCheckInterval,
+			&s.TimeoutSeconds, &s.MaxConnections, &s.IsActive, &s.Tags, &s.AllowedTools, &s.Metadata,
+			&s.CreatedAt, &s.UpdatedAt,
+		)
+		if err != nil {
+			r.logger.Error().Err(err).Msg("Failed to scan server row")
+			continue
+		}
+		servers = append(servers, &s)
+	}
+
+	if err = rows.Err(); err != nil {
+		r.logger.Error().Err(err).Msg("Error iterating server rows")
+		return nil, fmt.Errorf("error iterating servers: %w", err)
+	}
+
+	r.logger.Debug().
+		Int("count", len(servers)).
+		Bool("filtered", accessibleServerIDs != nil).
+		Msg("Servers listed for user")
+	return servers, nil
+}

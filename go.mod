@@ -14,9 +14,11 @@ require (
 	github.com/spf13/viper v1.21.0
 	github.com/stretchr/testify v1.11.1
 	golang.org/x/crypto v0.46.0
+	golang.org/x/oauth2 v0.34.0
 )
 
 require (
+	cloud.google.com/go/compute/metadata v0.8.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/bmatcuk/doublestar/v4 v4.6.1 // indirect
 	github.com/bytedance/sonic v1.14.0 // indirect
