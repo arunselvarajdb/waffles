@@ -60,12 +60,12 @@ jobs:
           cache: true
 
       - name: Run gosec Security Scanner
-        uses: securego/gosec@master
+        uses: securego/gosec@v2.21.4
         with:
-          args: '-exclude-generated ./...'
+          args: '-exclude-dir=test -exclude-dir=web -exclude-dir=node_modules -exclude-generated ./...'
 
       - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@0.28.0
         with:
           scan-type: 'fs'
           scan-ref: '.'

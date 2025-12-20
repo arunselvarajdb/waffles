@@ -11,7 +11,7 @@ RUN go mod download
 COPY . .
 
 # Build the mock server
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o mock-server ./test/cmd/test_mock_mcp_server.go
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o mock-server ./test/cmd/mock-mcp-server
 
 # Runtime stage
 FROM alpine:latest
