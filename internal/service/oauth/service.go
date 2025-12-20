@@ -263,3 +263,51 @@ func (s *Service) GetDefaultRole() string {
 func (s *Service) AutoCreateUsers() bool {
 	return s.config.AutoCreateUsers
 }
+
+// ValidateBearerToken validates an OAuth bearer token by calling the userinfo endpoint
+// Returns user info if the token is valid, error otherwise
+// This allows MCP clients to authenticate with OAuth access tokens
+func (s *Service) ValidateBearerToken(ctx context.Context, bearerToken string) (*UserInfo, error) {
+	if !s.IsEnabled() {
+		return nil, fmt.Errorf("OAuth is not enabled")
+	}
+
+	if s.discovery == nil || s.discovery.UserinfoEndpoint == "" {
+		return nil, fmt.Errorf("userinfo endpoint not available")
+	}
+
+	// Create a token source with the bearer token
+	token := &oauth2.Token{
+		AccessToken: bearerToken,
+		TokenType:   "Bearer",
+	}
+
+	// Use the token to fetch user info
+	userInfo, err := s.fetchUserInfo(ctx, token)
+	if err != nil {
+		s.logger.Debug().Err(err).Msg("Bearer token validation failed")
+		return nil, fmt.Errorf("invalid token: %w", err)
+	}
+
+	// Validate email domain if configured
+	if err := s.validateEmailDomain(userInfo.Email); err != nil {
+		return nil, err
+	}
+
+	s.logger.Debug().
+		Str("email", userInfo.Email).
+		Str("name", userInfo.Name).
+		Msg("Bearer token validated successfully")
+
+	return userInfo, nil
+}
+
+// GetIssuer returns the OIDC issuer URL
+func (s *Service) GetIssuer() string {
+	return s.config.Issuer
+}
+
+// GetBaseURL returns the OAuth base URL
+func (s *Service) GetBaseURL() string {
+	return s.config.BaseURL
+}

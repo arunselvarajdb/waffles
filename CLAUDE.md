@@ -53,6 +53,13 @@ cd web-app && npm run build   # Build production bundle
 make test-frontend            # Run frontend tests
 ```
 
+### OAuth/SSO with Keycloak (Optional)
+```bash
+cd examples/oauth/keycloak && docker-compose up -d   # Start Keycloak
+cd examples/oauth/keycloak && ./configure-dcr.sh     # Enable DCR for MCP clients (first time only)
+```
+See `docs/MCP_CLIENT_AUTH.md` for full OAuth setup instructions.
+
 ## Architecture
 
 ### Backend Structure

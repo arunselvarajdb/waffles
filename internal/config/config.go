@@ -70,7 +70,10 @@ type AuthConfig struct {
 	// Legacy alias for backwards compatibility - deprecated, use ResourceRBACEnabled
 	ServerGroupRBACEnabled bool `mapstructure:"server_group_rbac_enabled"`
 
-	// OAuth/SSO configuration
+	// MCP Client Authentication - controls which auth methods are accepted for MCP clients
+	MCPAuth MCPAuthConfig `mapstructure:"mcp_auth"`
+
+	// OAuth/SSO configuration (Keycloak or other OIDC provider)
 	OAuth OAuthConfig `mapstructure:"oauth"`
 
 	// Legacy JWT config (kept for API key validation, can be removed if not needed)
@@ -79,8 +82,27 @@ type AuthConfig struct {
 	JWTRefreshTokenExpiry time.Duration `mapstructure:"jwt_refresh_token_expiry"`
 }
 
+// MCPAuthConfig controls which authentication methods are accepted for MCP clients
+// This allows fine-grained control over how MCP clients (Claude Code, etc.) authenticate
+type MCPAuthConfig struct {
+	// API Key authentication - tokens prefixed with mcpgw_
+	// Default: true
+	APIKeyEnabled bool `mapstructure:"api_key"`
+
+	// Session authentication - use existing browser session
+	// Default: true
+	SessionEnabled bool `mapstructure:"session"`
+
+	// OAuth authentication for MCP clients (DCR flow)
+	// When false, /.well-known/oauth-protected-resource returns 404
+	// This allows enabling UI SSO while requiring MCP clients to use API keys
+	// Default: true (if auth.oauth.enabled is true)
+	OAuthEnabled bool `mapstructure:"oauth"`
+}
+
 // OAuthConfig holds SSO configuration for any OIDC-compliant provider
-// Supports: Authentik, Keycloak, Okta, Auth0, Azure AD, Google, and others
+// Recommended: Keycloak (supports DCR for MCP clients like Claude Code)
+// Also supports: Zitadel, Okta, Auth0, Azure AD, Google, and others
 type OAuthConfig struct {
 	// Enable SSO login (can be enabled alongside local password auth)
 	Enabled bool `mapstructure:"enabled"`

@@ -38,6 +38,8 @@ services:
       LOGGING_FORMAT: json
       SERVER_PORT: 8080
       SERVER_ENVIRONMENT: development
+      # Set AUTH_ENABLED=false in .env to disable auth for Claude Code MCP testing
+      AUTH_ENABLED: ${AUTH_ENABLED:-true}
       # SSO/OIDC Configuration (loaded from .env)
       AUTH_OAUTH_ENABLED: ${AUTH_OAUTH_ENABLED:-false}
       AUTH_OAUTH_BASE_URL: ${AUTH_OAUTH_BASE_URL:-http://localhost:8080}

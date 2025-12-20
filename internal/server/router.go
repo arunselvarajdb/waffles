@@ -91,13 +91,25 @@ func (s *Server) SetupRoutes() {
 	oauthHandler := handler.NewOAuthHandler(oauthService, userRepo, s.logger, frontendURL)
 	apiKeyHandler := handler.NewAPIKeyHandler(apiKeyRepo, s.logger)
 	namespaceHandler := handler.NewNamespaceHandler(namespaceRepo, s.logger)
+	oauthMetadataHandler := handler.NewOAuthMetadataHandler(s.config.Auth.OAuth, s.config.Auth.MCPAuth, s.logger)
+
+	// Create OAuth service adapter for bearer token validation
+	var oauthValidator middleware.OAuthValidator
+	if oauthService.IsEnabled() {
+		oauthValidator = middleware.NewOAuthServiceAdapter(oauthService)
+	}
 
 	// Auth middleware config
 	authConfig := &middleware.AuthConfig{
-		Logger:      s.logger,
-		UserRepo:    userRepo,
-		APIKeyRepo:  apiKeyRepo,
-		SessionName: "mcp_session",
+		Logger:         s.logger,
+		UserRepo:       userRepo,
+		APIKeyRepo:     apiKeyRepo,
+		OAuthValidator: oauthValidator,
+		SessionName:    "mcp_session",
+		MCPAuth: middleware.MCPAuthConfig{
+			APIKeyEnabled:  s.config.Auth.MCPAuth.APIKeyEnabled,
+			SessionEnabled: s.config.Auth.MCPAuth.SessionEnabled,
+		},
 	}
 
 	// Authz middleware config
@@ -111,6 +123,17 @@ func (s *Server) SetupRoutes() {
 
 	// Check if authentication is enabled
 	authEnabled := s.config.Auth.Enabled
+
+	// OAuth Protected Resource Metadata (RFC 9728) - for MCP OAuth authorization
+	// This must be a public endpoint for OAuth discovery
+	// Support both exact path and path-based discovery (RFC 9115 style)
+	s.router.GET("/.well-known/oauth-protected-resource", oauthMetadataHandler.GetProtectedResourceMetadata)
+	s.router.GET("/.well-known/oauth-protected-resource/*path", oauthMetadataHandler.GetProtectedResourceMetadata)
+
+	// OAuth Authorization Server Metadata - redirect to the actual auth server
+	// MCP clients may also try path-based discovery for the authorization server
+	s.router.GET("/.well-known/oauth-authorization-server", oauthMetadataHandler.GetAuthorizationServerMetadata)
+	s.router.GET("/.well-known/oauth-authorization-server/*path", oauthMetadataHandler.GetAuthorizationServerMetadata)
 
 	// API v1 routes
 	v1 := s.router.Group("/api/v1")

@@ -85,23 +85,44 @@
 
         <!-- Cursor Config -->
         <div v-show="activeConfigTab === 'cursor'" class="p-4">
-          <div class="space-y-3">
-            <p class="text-sm text-gray-600">
-              Add this to your Cursor MCP settings (<code class="bg-gray-100 px-1 rounded">~/.cursor/mcp.json</code>):
-            </p>
-            <div class="bg-gray-900 rounded-lg p-3 relative">
-              <button
-                type="button"
-                class="absolute top-2 right-2 text-xs text-gray-400 hover:text-white"
-                @click="copyToClipboard(cursorConfig)"
+          <div class="space-y-4">
+            <!-- One-Click Install Button -->
+            <div>
+              <p class="text-sm font-medium text-gray-700 mb-2">Option 1: One-Click Install</p>
+              <a
+                :href="cursorDeepLink"
+                class="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 text-white text-sm font-medium rounded-lg hover:from-purple-700 hover:to-indigo-700 transition-all shadow-sm"
               >
-                Copy
-              </button>
-              <pre class="text-xs text-green-400 font-mono overflow-x-auto whitespace-pre-wrap">{{ cursorConfig }}</pre>
+                <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+                </svg>
+                Add to Cursor
+              </a>
+              <p class="text-xs text-gray-500 mt-2">
+                Opens Cursor and prompts to add this MCP server. Uses OAuth for authentication.
+              </p>
             </div>
-            <div class="bg-blue-50 rounded-lg p-3 text-xs text-blue-700">
-              <strong>Note:</strong> Replace <code class="bg-blue-100 px-1 rounded">your-api-key</code> with your actual API key.
-              Restart Cursor after updating the configuration.
+
+            <!-- Manual Config -->
+            <div>
+              <p class="text-sm font-medium text-gray-700 mb-2">Option 2: Manual Configuration</p>
+              <p class="text-sm text-gray-600 mb-2">
+                Add this to your Cursor MCP settings (<code class="bg-gray-100 px-1 rounded">~/.cursor/mcp.json</code>):
+              </p>
+              <div class="bg-gray-900 rounded-lg p-3 relative">
+                <button
+                  type="button"
+                  class="absolute top-2 right-2 text-xs text-gray-400 hover:text-white"
+                  @click="copyToClipboard(cursorConfig)"
+                >
+                  Copy
+                </button>
+                <pre class="text-xs text-green-400 font-mono overflow-x-auto whitespace-pre-wrap">{{ cursorConfig }}</pre>
+              </div>
+              <div class="bg-blue-50 rounded-lg p-3 text-xs text-blue-700 mt-2">
+                <strong>Note:</strong> Replace <code class="bg-blue-100 px-1 rounded">your-api-key</code> with your actual API key.
+                Restart Cursor after updating the configuration.
+              </div>
             </div>
           </div>
         </div>
@@ -289,6 +310,24 @@ const cursorConfig = computed(() => {
     }
   }
   return JSON.stringify(config, null, 2)
+})
+
+// Cursor deep link for one-click install
+// Format: cursor://anysphere.cursor-deeplink/mcp/install?name=$NAME&config=$BASE64_CONFIG
+const cursorDeepLink = computed(() => {
+  if (!props.server?.id) return ''
+  const base = gatewayBaseUrl.value
+  const serverName = props.server.name.toLowerCase().replace(/\s+/g, '-')
+
+  // Config for remote HTTP server (OAuth-enabled, no API key needed)
+  const config = {
+    url: `${base}/${props.server.id}`
+  }
+
+  // Base64 encode the config
+  const configBase64 = btoa(JSON.stringify(config))
+
+  return `cursor://anysphere.cursor-deeplink/mcp/install?name=${encodeURIComponent(serverName)}&config=${configBase64}`
 })
 
 // Client configuration for VS Code (Cline/Continue)

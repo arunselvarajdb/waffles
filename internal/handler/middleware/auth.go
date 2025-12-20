@@ -25,14 +25,41 @@ type AuthType string
 const (
 	AuthTypeSession AuthType = "session"
 	AuthTypeAPIKey  AuthType = "apikey"
+	AuthTypeOAuth   AuthType = "oauth"
 )
+
+// OAuthValidator interface for validating OAuth bearer tokens
+type OAuthValidator interface {
+	ValidateBearerToken(ctx context.Context, token string) (userInfo *OAuthUserInfo, err error)
+	IsEnabled() bool
+	GetIssuer() string
+	GetBaseURL() string
+	GetDefaultRole() string
+	AutoCreateUsers() bool
+}
+
+// OAuthUserInfo represents user info from OAuth token validation
+type OAuthUserInfo struct {
+	ID       string
+	Email    string
+	Name     string
+	Provider string
+}
+
+// MCPAuthConfig controls which authentication methods are accepted for MCP clients
+type MCPAuthConfig struct {
+	APIKeyEnabled  bool
+	SessionEnabled bool
+}
 
 // AuthConfig contains configuration for authentication middleware
 type AuthConfig struct {
-	Logger       logger.Logger
-	UserRepo     *repository.UserRepository
-	APIKeyRepo   *repository.APIKeyRepository
-	SessionName  string
+	Logger         logger.Logger
+	UserRepo       *repository.UserRepository
+	APIKeyRepo     *repository.APIKeyRepository
+	OAuthValidator OAuthValidator
+	SessionName    string
+	MCPAuth        MCPAuthConfig
 }
 
 // SessionAuth creates a middleware that validates session-based authentication
@@ -127,13 +154,14 @@ func APIKeyAuth(cfg *AuthConfig) gin.HandlerFunc {
 	}
 }
 
-// CombinedAuth creates a middleware that accepts either session or API key authentication
-// This is useful for endpoints that should work for both browser and programmatic access
+// CombinedAuth creates a middleware that accepts session, API key, or OAuth bearer token authentication
+// This is useful for endpoints that should work for both browser and programmatic access (including MCP clients)
 func CombinedAuth(cfg *AuthConfig) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// First, check for API key in header (takes precedence for programmatic access)
+		// Only if API key auth is enabled in MCPAuth config
 		apiKey := extractAPIKey(c)
-		if apiKey != "" {
+		if apiKey != "" && cfg.MCPAuth.APIKeyEnabled {
 			// Validate API key
 			keyHash := repository.HashAPIKey(apiKey)
 			key, err := cfg.APIKeyRepo.GetByHash(c.Request.Context(), keyHash)
@@ -159,33 +187,115 @@ func CombinedAuth(cfg *AuthConfig) gin.HandlerFunc {
 			}
 			// Invalid API key - don't fall through to session, return error
 			cfg.Logger.Warn().Msg("Invalid API key attempt")
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
-				"error":   "unauthorized",
-				"message": "Invalid or expired API key",
-			})
+			sendUnauthorizedWithWWWAuthenticate(c, cfg, "Invalid or expired API key")
+			return
+		} else if apiKey != "" && !cfg.MCPAuth.APIKeyEnabled {
+			// API key provided but API key auth is disabled
+			cfg.Logger.Debug().Msg("API key auth disabled, ignoring API key")
+		}
+
+		// Check for OAuth bearer token (not an API key)
+		bearerToken := extractBearerToken(c)
+		if bearerToken != "" && cfg.OAuthValidator != nil && cfg.OAuthValidator.IsEnabled() {
+			// Validate OAuth token
+			userInfo, err := cfg.OAuthValidator.ValidateBearerToken(c.Request.Context(), bearerToken)
+			if err != nil {
+				cfg.Logger.Debug().Err(err).Msg("OAuth token validation failed")
+				sendUnauthorizedWithWWWAuthenticate(c, cfg, "Invalid or expired OAuth token")
+				return
+			}
+
+			// Look up or create user using FindOrCreateOAuthUser
+			user, isNew, err := cfg.UserRepo.FindOrCreateOAuthUser(
+				c.Request.Context(),
+				userInfo.Provider,
+				userInfo.ID,
+				userInfo.Email,
+				userInfo.Name,
+			)
+			if err != nil {
+				if !cfg.OAuthValidator.AutoCreateUsers() {
+					cfg.Logger.Warn().Str("email", userInfo.Email).Msg("OAuth user not found and auto-create disabled")
+					sendUnauthorizedWithWWWAuthenticate(c, cfg, "User not registered")
+					return
+				}
+				cfg.Logger.Error().Err(err).Str("email", userInfo.Email).Msg("Failed to find or create OAuth user")
+				c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{
+					"error":   "internal_error",
+					"message": "Failed to process user account",
+				})
+				return
+			}
+
+			// Assign default role if new user
+			if isNew {
+				defaultRole := cfg.OAuthValidator.GetDefaultRole()
+				if err := cfg.UserRepo.AssignRole(c.Request.Context(), user.ID, defaultRole); err != nil {
+					cfg.Logger.Warn().Err(err).Str("user_id", user.ID).Str("role", defaultRole).Msg("Failed to assign default role")
+				}
+			}
+
+			if !user.IsActive {
+				sendUnauthorizedWithWWWAuthenticate(c, cfg, "User account is inactive")
+				return
+			}
+
+			// Get user roles
+			roles, _ := cfg.UserRepo.GetUserRoles(c.Request.Context(), user.ID)
+
+			cfg.Logger.Debug().Str("email", user.Email).Str("user_id", user.ID).Msg("OAuth bearer token authenticated")
+
+			c.Set(ContextKeyUserID, user.ID)
+			c.Set(ContextKeyUserEmail, user.Email)
+			c.Set(ContextKeyUserRoles, roles)
+			c.Set(ContextKeyAuthType, AuthTypeOAuth)
+			c.Next()
 			return
 		}
 
-		// No API key - check session
-		session := sessions.Default(c)
-		userID := session.Get(ContextKeyUserID)
+		// No API key or OAuth token - check session (if enabled)
+		if cfg.MCPAuth.SessionEnabled {
+			session := sessions.Default(c)
+			userID := session.Get(ContextKeyUserID)
 
-		if userID == nil {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
-				"error":   "unauthorized",
-				"message": "Authentication required",
-			})
-			return
+			if userID != nil {
+				// Set user context from session
+				c.Set(ContextKeyUserID, userID)
+				c.Set(ContextKeyUserEmail, session.Get(ContextKeyUserEmail))
+				c.Set(ContextKeyUserRoles, session.Get(ContextKeyUserRoles))
+				c.Set(ContextKeyAuthType, AuthTypeSession)
+				c.Next()
+				return
+			}
 		}
 
-		// Set user context from session
-		c.Set(ContextKeyUserID, userID)
-		c.Set(ContextKeyUserEmail, session.Get(ContextKeyUserEmail))
-		c.Set(ContextKeyUserRoles, session.Get(ContextKeyUserRoles))
-		c.Set(ContextKeyAuthType, AuthTypeSession)
-
-		c.Next()
+		// No valid authentication found
+		sendUnauthorizedWithWWWAuthenticate(c, cfg, "Authentication required")
 	}
+}
+
+// sendUnauthorizedWithWWWAuthenticate sends a 401 response with WWW-Authenticate header for MCP OAuth
+func sendUnauthorizedWithWWWAuthenticate(c *gin.Context, cfg *AuthConfig, message string) {
+	// Build WWW-Authenticate header per MCP OAuth spec
+	if cfg.OAuthValidator != nil && cfg.OAuthValidator.IsEnabled() {
+		baseURL := cfg.OAuthValidator.GetBaseURL()
+		if baseURL == "" {
+			// Fall back to request host
+			scheme := "https"
+			if c.Request.TLS == nil {
+				scheme = "http"
+			}
+			baseURL = scheme + "://" + c.Request.Host
+		}
+		resourceMetadataURL := baseURL + "/.well-known/oauth-protected-resource"
+		wwwAuth := `Bearer resource_metadata="` + resourceMetadataURL + `"`
+		c.Header("WWW-Authenticate", wwwAuth)
+	}
+
+	c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+		"error":   "unauthorized",
+		"message": message,
+	})
 }
 
 // OptionalAuth creates a middleware that extracts user info if authenticated, but allows anonymous access
@@ -243,6 +353,28 @@ func extractAPIKey(c *gin.Context) string {
 	}
 
 	return ""
+}
+
+// extractBearerToken extracts a non-API-key bearer token from the Authorization header
+// This is used for OAuth access tokens from external identity providers
+func extractBearerToken(c *gin.Context) string {
+	authHeader := c.GetHeader("Authorization")
+	if authHeader == "" {
+		return ""
+	}
+
+	parts := strings.SplitN(authHeader, " ", 2)
+	if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") {
+		return ""
+	}
+
+	token := strings.TrimSpace(parts[1])
+	// Skip if it's an API key (handled separately)
+	if strings.HasPrefix(token, "mcpgw_") {
+		return ""
+	}
+
+	return token
 }
 
 // GetUserID retrieves the user ID from the context
