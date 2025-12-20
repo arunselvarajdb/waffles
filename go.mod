@@ -18,7 +18,6 @@ require (
 )
 
 require (
-	cloud.google.com/go/compute/metadata v0.8.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/bmatcuk/doublestar/v4 v4.6.1 // indirect
 	github.com/bytedance/sonic v1.14.0 // indirect
