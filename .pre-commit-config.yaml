@@ -64,7 +64,7 @@ repos:
         name: eslint
         entry: bash -c 'cd web-app && npm run lint --fix'
         language: system
-        types_or: [javascript, vue, typescript]
+        types_or: [javascript, vue, ts]
         pass_filenames: false
 
   # Dockerfile linting

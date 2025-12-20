@@ -58,8 +58,10 @@ secretGroup = 0
 entropy = 3.5
 keywords = ["jwt_secret", "jwt-secret", "jwtsecret"]
 
-# Entropy settings
-[rules.entropy]
-enable = true
-group = 1
+[[rules]]
+id = "generic-secret"
+description = "Generic secret pattern"
 regex = '''(?i)(secret|token|key|password|credential)[\"']?\s*[:=]\s*[\"']([a-zA-Z0-9+/=_\-]{20,})[\"']'''
+secretGroup = 2
+entropy = 3.5
+keywords = ["secret", "token", "key", "password", "credential"]

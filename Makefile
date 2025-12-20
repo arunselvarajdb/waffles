@@ -299,7 +299,7 @@ clean-all: clean
 ## pre-commit: Install and run pre-commit hooks
 pre-commit:
 	@echo "$(COLOR_BLUE)Setting up pre-commit hooks...$(COLOR_RESET)"
-	@command -v pre-commit > /dev/null || pip install pre-commit
+	@command -v pre-commit > /dev/null || pip3 install pre-commit
 	@pre-commit install
 	@echo "$(COLOR_GREEN)✓ Pre-commit hooks installed$(COLOR_RESET)"
 	@echo "Run 'pre-commit run --all-files' to run all checks"
@@ -308,11 +308,11 @@ pre-commit:
 security-scan:
 	@echo "$(COLOR_BLUE)Running security scans...$(COLOR_RESET)"
 	@echo "Scanning for secrets with gitleaks..."
-	@command -v gitleaks > /dev/null || (echo "Installing gitleaks..." && go install github.com/gitleaks/gitleaks/v8@latest)
+	@command -v gitleaks > /dev/null || (echo "Error: gitleaks not found. Install: https://github.com/gitleaks/gitleaks#installing" && exit 1)
 	@gitleaks detect --source . --config .gitleaks.toml -v || true
 	@echo ""
 	@echo "Scanning Go code with gosec..."
-	@command -v gosec > /dev/null || (echo "Installing gosec..." && go install github.com/securego/gosec/v2/cmd/gosec@latest)
+	@command -v gosec > /dev/null || (echo "Error: gosec not found. Install: go install github.com/securego/gosec/v2/cmd/gosec@latest" && exit 1)
 	@gosec -exclude-dir=test -exclude-dir=web -exclude-dir=node_modules ./... || true
 	@echo ""
 	@echo "$(COLOR_GREEN)✓ Security scan complete$(COLOR_RESET)"
