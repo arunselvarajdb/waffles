@@ -1,4 +1,4 @@
-.PHONY: help install-tools dev-up dev-down migrate-up migrate-down migrate-create seed run test test-unit test-integration test-e2e test-e2e-ui test-e2e-headed test-frontend test-all lint fmt generate build build-linux build-all build-frontend docker-build docker-push clean clean-all
+.PHONY: help install-tools dev-up dev-down migrate-up migrate-down migrate-create seed run test test-unit test-integration test-e2e test-e2e-ui test-e2e-headed test-frontend test-all lint fmt generate build build-linux build-all build-frontend docker-build docker-push clean clean-all pre-commit security-scan
 
 # Variables
 APP_NAME=mcp-gateway
@@ -295,3 +295,24 @@ clean-all: clean
 	@rm -rf web-app/dist/
 	@rm -rf web-app/node_modules/
 	@echo "$(COLOR_GREEN)✓ All artifacts cleaned$(COLOR_RESET)"
+
+## pre-commit: Install and run pre-commit hooks
+pre-commit:
+	@echo "$(COLOR_BLUE)Setting up pre-commit hooks...$(COLOR_RESET)"
+	@command -v pre-commit > /dev/null || pip install pre-commit
+	@pre-commit install
+	@echo "$(COLOR_GREEN)✓ Pre-commit hooks installed$(COLOR_RESET)"
+	@echo "Run 'pre-commit run --all-files' to run all checks"
+
+## security-scan: Run security scanning tools
+security-scan:
+	@echo "$(COLOR_BLUE)Running security scans...$(COLOR_RESET)"
+	@echo "Scanning for secrets with gitleaks..."
+	@command -v gitleaks > /dev/null || (echo "Installing gitleaks..." && go install github.com/gitleaks/gitleaks/v8@latest)
+	@gitleaks detect --source . --config .gitleaks.toml -v || true
+	@echo ""
+	@echo "Scanning Go code with gosec..."
+	@command -v gosec > /dev/null || (echo "Installing gosec..." && go install github.com/securego/gosec/v2/cmd/gosec@latest)
+	@gosec -exclude-dir=test -exclude-dir=web -exclude-dir=node_modules ./... || true
+	@echo ""
+	@echo "$(COLOR_GREEN)✓ Security scan complete$(COLOR_RESET)"

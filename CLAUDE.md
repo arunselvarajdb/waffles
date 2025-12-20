@@ -30,6 +30,8 @@ go test -v -run TestName ./...    # Run a single test by name
 ```bash
 make lint             # Run golangci-lint (40+ linters enabled)
 make fmt              # Format code with gofmt and run go mod tidy
+make pre-commit       # Install pre-commit hooks
+pre-commit run --all-files  # Run all pre-commit checks manually
 ```
 
 ### Building

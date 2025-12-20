@@ -1,0 +1,112 @@
+# Pre-commit configuration for MCP Gateway
+# Install: pip install pre-commit && pre-commit install
+# Run manually: pre-commit run --all-files
+
+repos:
+  # General hooks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+        args: [--markdown-linebreak-ext=md]
+      - id: end-of-file-fixer
+      - id: check-yaml
+        args: [--unsafe]  # Allow custom tags
+      - id: check-json
+      - id: check-added-large-files
+        args: ['--maxkb=1000']
+      - id: check-merge-conflict
+      - id: detect-private-key
+      - id: no-commit-to-branch
+        args: ['--branch', 'main', '--branch', 'master']
+
+  # Secret detection with Gitleaks
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.18.4
+    hooks:
+      - id: gitleaks
+
+  # Go linting with golangci-lint
+  - repo: https://github.com/golangci/golangci-lint
+    rev: v1.61.0
+    hooks:
+      - id: golangci-lint
+        args: ['--timeout=5m']
+
+  # Go security scanner
+  - repo: https://github.com/securego/gosec
+    rev: v2.21.4
+    hooks:
+      - id: gosec
+        args: ['-exclude-dir=test', '-exclude-dir=web', './...']
+
+  # Go formatting
+  - repo: local
+    hooks:
+      - id: go-fmt
+        name: go fmt
+        entry: gofmt -w -s
+        language: system
+        types: [go]
+        pass_filenames: true
+
+      - id: go-mod-tidy
+        name: go mod tidy
+        entry: go mod tidy
+        language: system
+        types: [go]
+        pass_filenames: false
+
+  # JavaScript/Vue linting
+  - repo: local
+    hooks:
+      - id: eslint
+        name: eslint
+        entry: bash -c 'cd web-app && npm run lint --fix'
+        language: system
+        types_or: [javascript, vue, typescript]
+        pass_filenames: false
+
+  # Dockerfile linting
+  - repo: https://github.com/hadolint/hadolint
+    rev: v2.12.0
+    hooks:
+      - id: hadolint-docker
+        args: ['--ignore', 'DL3018', '--ignore', 'DL3008']  # Ignore pin versions
+
+  # Shell script linting
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.10.0.1
+    hooks:
+      - id: shellcheck
+        args: ['--severity=warning']
+
+  # YAML linting
+  - repo: https://github.com/adrienverge/yamllint
+    rev: v1.35.1
+    hooks:
+      - id: yamllint
+        args: ['-c', '.yamllint.yaml']
+
+  # Markdown linting
+  - repo: https://github.com/igorshubovych/markdownlint-cli
+    rev: v0.42.0
+    hooks:
+      - id: markdownlint
+        args: ['--fix', '--disable', 'MD013', 'MD033', 'MD041']
+
+  # Check for hardcoded credentials patterns
+  - repo: local
+    hooks:
+      - id: check-secrets-patterns
+        name: Check for secret patterns
+        entry: bash -c 'grep -rn --include="*.go" --include="*.js" --include="*.vue" --include="*.ts" -E "(password|secret|api_key|apikey|token|credential).*=.*[\"'\'']((?!your-|example|changeme|xxx|placeholder).{8,})[\"'\'']" . && exit 1 || exit 0'
+        language: system
+        pass_filenames: false
+
+# CI configuration
+ci:
+  autofix_commit_msg: 'style: auto-fix by pre-commit hooks'
+  autofix_prs: true
+  autoupdate_commit_msg: 'chore: update pre-commit hooks'
+  autoupdate_schedule: monthly
