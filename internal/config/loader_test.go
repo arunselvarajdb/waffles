@@ -23,6 +23,26 @@ func TestLoad_WithValidConfig(t *testing.T) {
 }
 
 func TestLoad_WithConfigPath(t *testing.T) {
+	// Clear any environment variables that might override config values
+	// This is important for CI environments that set DATABASE_HOST, etc.
+	envVarsToClear := []string{
+		"DATABASE_HOST", "DATABASE_PORT", "DATABASE_USER", "DATABASE_PASSWORD", "DATABASE_NAME",
+		"SERVER_PORT", "SERVER_ENVIRONMENT",
+		"REDIS_HOST", "REDIS_PORT",
+	}
+	savedEnv := make(map[string]string)
+	for _, key := range envVarsToClear {
+		if val, exists := os.LookupEnv(key); exists {
+			savedEnv[key] = val
+			os.Unsetenv(key)
+		}
+	}
+	defer func() {
+		for key, val := range savedEnv {
+			os.Setenv(key, val)
+		}
+	}()
+
 	// Create temporary config file
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "test_config.yaml")
