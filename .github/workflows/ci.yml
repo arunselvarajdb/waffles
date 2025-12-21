@@ -146,8 +146,8 @@ jobs:
         id: frontend_test
         run: |
           cd web-app
-          # Run tests with coverage and capture output
-          npm test -- --coverage --coverageReporters=text --coverageReporters=text-summary 2>&1 | tee test-output.txt
+          # Run tests with coverage (reporters configured in vitest.config.ts)
+          npm run test:coverage 2>&1 | tee test-output.txt
           test_exit_code=${PIPESTATUS[0]}
 
           # Debug: show what we captured

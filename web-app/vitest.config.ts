@@ -9,6 +9,11 @@ export default defineConfig({
     environment: 'happy-dom',
     include: ['src/**/*.{test,spec}.{js,ts,vue}'],
     setupFiles: ['./src/test/setup.ts'],
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'text-summary', 'html'],
+      reportsDirectory: './coverage',
+    },
   },
   resolve: {
     alias: {
