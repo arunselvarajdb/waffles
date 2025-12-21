@@ -1,7 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { mount, flushPromises } from '@vue/test-utils'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { mount, flushPromises, VueWrapper } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
-import { createRouter, createWebHistory } from 'vue-router'
+import { createRouter, createMemoryHistory } from 'vue-router'
 import LoginView from './LoginView.vue'
 
 // Mock the auth store
@@ -29,29 +29,42 @@ global.fetch = vi.fn(() =>
 ) as unknown as typeof fetch
 
 describe('LoginView', () => {
-  const router = createRouter({
-    history: createWebHistory(),
-    routes: [
-      { path: '/', component: { template: '<div>Home</div>' } },
-      { path: '/login', component: LoginView },
-      { path: '/admin', component: { template: '<div>Admin</div>' } },
-      { path: '/dashboard', component: { template: '<div>Dashboard</div>' } },
-    ],
-  })
+  let router: ReturnType<typeof createRouter>
+  let wrapper: VueWrapper | null = null
 
   beforeEach(async () => {
+    // Create a fresh router for each test using memory history (works in test environment)
+    router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        { path: '/', component: { template: '<div>Home</div>' } },
+        { path: '/login', component: LoginView },
+        { path: '/admin', component: { template: '<div>Admin</div>' } },
+        { path: '/dashboard', component: { template: '<div>Dashboard</div>' } },
+      ],
+    })
+
     setActivePinia(createPinia())
     vi.clearAllMocks()
     router.push('/login')
     await router.isReady()
   })
 
+  afterEach(() => {
+    // Cleanup wrapper to prevent async navigation after test teardown
+    if (wrapper) {
+      wrapper.unmount()
+      wrapper = null
+    }
+  })
+
   const mountComponent = () => {
-    return mount(LoginView, {
+    wrapper = mount(LoginView, {
       global: {
         plugins: [router, createPinia()],
       },
     })
+    return wrapper
   }
 
   describe('rendering', () => {
