@@ -11,10 +11,10 @@ var (
 	ErrNotFound = errors.New("not found")
 
 	// User errors
-	ErrUserNotFound      = errors.New("user not found")
-	ErrUserAlreadyExists = errors.New("user already exists")
+	ErrUserNotFound       = errors.New("user not found")
+	ErrUserAlreadyExists  = errors.New("user already exists")
 	ErrInvalidCredentials = errors.New("invalid credentials")
-	ErrUserInactive      = errors.New("user is inactive")
+	ErrUserInactive       = errors.New("user is inactive")
 
 	// Server errors
 	ErrServerNotFound      = errors.New("server not found")
@@ -27,8 +27,8 @@ var (
 	ErrAPIKeyInvalid  = errors.New("invalid API key")
 
 	// Token errors
-	ErrTokenInvalid  = errors.New("invalid token")
-	ErrTokenExpired  = errors.New("token has expired")
+	ErrTokenInvalid   = errors.New("invalid token")
+	ErrTokenExpired   = errors.New("token has expired")
 	ErrTokenMalformed = errors.New("malformed token")
 
 	// Permission errors

@@ -4,18 +4,22 @@ import (
 	"context"
 
 	"github.com/waffles/mcp-gateway/internal/domain"
-	"github.com/waffles/mcp-gateway/internal/repository"
 	"github.com/waffles/mcp-gateway/pkg/logger"
 )
 
+// NamespaceRepository defines the interface for namespace data access.
+type NamespaceRepository interface {
+	GetAccessibleServerIDs(ctx context.Context, roles []string, level domain.AccessLevel) ([]string, error)
+}
+
 // Service handles server access control logic
 type Service struct {
-	namespaceRepo *repository.NamespaceRepository
+	namespaceRepo NamespaceRepository
 	logger        logger.Logger
 }
 
 // NewService creates a new server access service
-func NewService(namespaceRepo *repository.NamespaceRepository, log logger.Logger) *Service {
+func NewService(namespaceRepo NamespaceRepository, log logger.Logger) *Service {
 	return &Service{
 		namespaceRepo: namespaceRepo,
 		logger:        log,

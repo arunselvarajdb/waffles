@@ -1,25 +1,40 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
 
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
+	"golang.org/x/crypto/bcrypt"
+
 	"github.com/waffles/mcp-gateway/internal/domain"
 	"github.com/waffles/mcp-gateway/internal/handler/middleware"
 	"github.com/waffles/mcp-gateway/internal/repository"
 	"github.com/waffles/mcp-gateway/pkg/logger"
-	"golang.org/x/crypto/bcrypt"
 )
 
 // AuthHandler handles authentication-related HTTP requests
 type AuthHandler struct {
-	userRepo *repository.UserRepository
+	userRepo UserRepositoryInterface
 	logger   logger.Logger
 }
 
 // NewAuthHandler creates a new auth handler
 func NewAuthHandler(userRepo *repository.UserRepository, log logger.Logger) *AuthHandler {
+	var repo UserRepositoryInterface
+	if userRepo != nil {
+		repo = userRepo
+	}
+
+	return &AuthHandler{
+		userRepo: repo,
+		logger:   log,
+	}
+}
+
+// NewAuthHandlerWithInterface creates a new auth handler with interface (for testing).
+func NewAuthHandlerWithInterface(userRepo UserRepositoryInterface, log logger.Logger) *AuthHandler {
 	return &AuthHandler{
 		userRepo: userRepo,
 		logger:   log,
@@ -60,7 +75,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	// Find user by email
 	user, err := h.userRepo.GetByEmail(c.Request.Context(), req.Email)
 	if err != nil {
-		if err == domain.ErrUserNotFound {
+		if errors.Is(err, domain.ErrUserNotFound) {
 			h.logger.Warn().Str("email", req.Email).Msg("Login attempt for non-existent user")
 			c.JSON(http.StatusUnauthorized, gin.H{
 				"error":   "invalid_credentials",
@@ -176,7 +191,7 @@ func (h *AuthHandler) GetCurrentUser(c *gin.Context) {
 	// Get user from database to ensure fresh data
 	user, err := h.userRepo.GetByID(c.Request.Context(), userID)
 	if err != nil {
-		if err == domain.ErrUserNotFound {
+		if errors.Is(err, domain.ErrUserNotFound) {
 			c.JSON(http.StatusUnauthorized, gin.H{
 				"error":   "user_not_found",
 				"message": "User not found",

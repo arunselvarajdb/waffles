@@ -9,7 +9,7 @@ type APIKey struct {
 	ID         string     `json:"id"`
 	UserID     string     `json:"user_id"`
 	Name       string     `json:"name"`
-	KeyHash    string     `json:"-"` // Never expose key hash
+	KeyHash    string     `json:"-"`      // Never expose key hash
 	Prefix     string     `json:"prefix"` // First 8 chars for identification
 	ExpiresAt  *time.Time `json:"expires_at,omitempty"`
 	LastUsedAt *time.Time `json:"last_used_at,omitempty"`

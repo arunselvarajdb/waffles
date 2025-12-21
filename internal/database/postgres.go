@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+
 	"github.com/waffles/mcp-gateway/internal/config"
 	"github.com/waffles/mcp-gateway/pkg/logger"
 )

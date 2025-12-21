@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+
 	"github.com/waffles/mcp-gateway/internal/domain"
 )
 
@@ -163,7 +164,6 @@ func (r *AuditRepository) List(ctx context.Context, filter domain.AuditLogFilter
 	if filter.Offset > 0 {
 		query += fmt.Sprintf(" OFFSET $%d", argIndex)
 		args = append(args, filter.Offset)
-		argIndex++
 	}
 
 	rows, err := r.pool.Query(ctx, query, args...)

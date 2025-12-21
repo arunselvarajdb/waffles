@@ -57,3 +57,14 @@ logs/
 # Documentation builds
 docs/_build/
 site/
+
+# Node modules (e2e tests)
+node_modules/
+
+# Coverage reports
+coverage/
+web-app/coverage/
+
+# Playwright test artifacts
+playwright-report/
+test-results/

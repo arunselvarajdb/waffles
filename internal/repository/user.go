@@ -2,25 +2,26 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
+
 	"github.com/waffles/mcp-gateway/internal/domain"
 	"github.com/waffles/mcp-gateway/pkg/logger"
 )
 
 // UserRepository handles user data persistence
 type UserRepository struct {
-	pool   *pgxpool.Pool
+	db     DBTX
 	logger logger.Logger
 }
 
 // NewUserRepository creates a new user repository
-func NewUserRepository(pool *pgxpool.Pool, log logger.Logger) *UserRepository {
+func NewUserRepository(db DBTX, log logger.Logger) *UserRepository {
 	return &UserRepository{
-		pool:   pool,
+		db:     db,
 		logger: log,
 	}
 }
@@ -33,7 +34,7 @@ func (r *UserRepository) Create(ctx context.Context, user *domain.User) error {
 		RETURNING id, created_at, updated_at
 	`
 
-	err := r.pool.QueryRow(ctx, query,
+	err := r.db.QueryRow(ctx, query,
 		user.Email,
 		user.PasswordHash,
 		user.Name,
@@ -55,16 +56,16 @@ func (r *UserRepository) Create(ctx context.Context, user *domain.User) error {
 	return nil
 }
 
-// GetByID retrieves a user by ID
-func (r *UserRepository) GetByID(ctx context.Context, id string) (*domain.User, error) {
-	query := `
+// getUserBy is a helper that retrieves a user by a given column and value.
+func (r *UserRepository) getUserBy(ctx context.Context, column, value, logField string) (*domain.User, error) {
+	query := fmt.Sprintf(`
 		SELECT id, email, COALESCE(password_hash, ''), COALESCE(name, ''), COALESCE(auth_provider, 'local'), COALESCE(external_id, ''), is_active, created_at, updated_at
 		FROM users
-		WHERE id = $1
-	`
+		WHERE %s = $1
+	`, column)
 
 	var user domain.User
-	err := r.pool.QueryRow(ctx, query, id).Scan(
+	err := r.db.QueryRow(ctx, query, value).Scan(
 		&user.ID,
 		&user.Email,
 		&user.PasswordHash,
@@ -76,47 +77,26 @@ func (r *UserRepository) GetByID(ctx context.Context, id string) (*domain.User, 
 		&user.UpdatedAt,
 	)
 
-	if err == pgx.ErrNoRows {
+	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, domain.ErrUserNotFound
 	}
 	if err != nil {
-		r.logger.Error().Err(err).Str("user_id", id).Msg("Failed to get user by ID")
-		return nil, fmt.Errorf("failed to get user: %w", err)
+		r.logger.Error().Err(err).Str(logField, value).Msg("Failed to get user")
+
+		return nil, fmt.Errorf("failed to get user by %s: %w", column, err)
 	}
 
 	return &user, nil
 }
 
-// GetByEmail retrieves a user by email
+// GetByID retrieves a user by ID.
+func (r *UserRepository) GetByID(ctx context.Context, id string) (*domain.User, error) {
+	return r.getUserBy(ctx, "id", id, "user_id")
+}
+
+// GetByEmail retrieves a user by email.
 func (r *UserRepository) GetByEmail(ctx context.Context, email string) (*domain.User, error) {
-	query := `
-		SELECT id, email, COALESCE(password_hash, ''), COALESCE(name, ''), COALESCE(auth_provider, 'local'), COALESCE(external_id, ''), is_active, created_at, updated_at
-		FROM users
-		WHERE email = $1
-	`
-
-	var user domain.User
-	err := r.pool.QueryRow(ctx, query, email).Scan(
-		&user.ID,
-		&user.Email,
-		&user.PasswordHash,
-		&user.Name,
-		&user.AuthProvider,
-		&user.ExternalID,
-		&user.IsActive,
-		&user.CreatedAt,
-		&user.UpdatedAt,
-	)
-
-	if err == pgx.ErrNoRows {
-		return nil, domain.ErrUserNotFound
-	}
-	if err != nil {
-		r.logger.Error().Err(err).Str("email", email).Msg("Failed to get user by email")
-		return nil, fmt.Errorf("failed to get user by email: %w", err)
-	}
-
-	return &user, nil
+	return r.getUserBy(ctx, "email", email, "email")
 }
 
 // Update updates an existing user
@@ -129,7 +109,7 @@ func (r *UserRepository) Update(ctx context.Context, user *domain.User) error {
 	`
 
 	user.UpdatedAt = time.Now()
-	err := r.pool.QueryRow(ctx, query,
+	err := r.db.QueryRow(ctx, query,
 		user.Email,
 		user.Name,
 		user.IsActive,
@@ -137,7 +117,7 @@ func (r *UserRepository) Update(ctx context.Context, user *domain.User) error {
 		user.ID,
 	).Scan(&user.UpdatedAt)
 
-	if err == pgx.ErrNoRows {
+	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.ErrUserNotFound
 	}
 	if err != nil {
@@ -157,7 +137,7 @@ func (r *UserRepository) UpdatePassword(ctx context.Context, userID string, pass
 		WHERE id = $3
 	`
 
-	result, err := r.pool.Exec(ctx, query, passwordHash, time.Now(), userID)
+	result, err := r.db.Exec(ctx, query, passwordHash, time.Now(), userID)
 	if err != nil {
 		r.logger.Error().Err(err).Str("user_id", userID).Msg("Failed to update password")
 		return fmt.Errorf("failed to update password: %w", err)
@@ -175,7 +155,7 @@ func (r *UserRepository) UpdatePassword(ctx context.Context, userID string, pass
 func (r *UserRepository) Delete(ctx context.Context, id string) error {
 	query := `DELETE FROM users WHERE id = $1`
 
-	result, err := r.pool.Exec(ctx, query, id)
+	result, err := r.db.Exec(ctx, query, id)
 	if err != nil {
 		r.logger.Error().Err(err).Str("user_id", id).Msg("Failed to delete user")
 		return fmt.Errorf("failed to delete user: %w", err)
@@ -194,7 +174,7 @@ func (r *UserRepository) List(ctx context.Context, limit, offset int) ([]*domain
 	// Get total count
 	countQuery := `SELECT COUNT(*) FROM users`
 	var total int
-	err := r.pool.QueryRow(ctx, countQuery).Scan(&total)
+	err := r.db.QueryRow(ctx, countQuery).Scan(&total)
 	if err != nil {
 		r.logger.Error().Err(err).Msg("Failed to count users")
 		return nil, 0, fmt.Errorf("failed to count users: %w", err)
@@ -207,7 +187,7 @@ func (r *UserRepository) List(ctx context.Context, limit, offset int) ([]*domain
 		LIMIT $1 OFFSET $2
 	`
 
-	rows, err := r.pool.Query(ctx, query, limit, offset)
+	rows, err := r.db.Query(ctx, query, limit, offset)
 	if err != nil {
 		r.logger.Error().Err(err).Msg("Failed to list users")
 		return nil, 0, fmt.Errorf("failed to list users: %w", err)
@@ -255,7 +235,7 @@ func (r *UserRepository) GetUserRoles(ctx context.Context, userID string) ([]str
 		WHERE ur.user_id = $1
 	`
 
-	rows, err := r.pool.Query(ctx, query, userID)
+	rows, err := r.db.Query(ctx, query, userID)
 	if err != nil {
 		r.logger.Error().Err(err).Str("user_id", userID).Msg("Failed to get user roles")
 		return nil, fmt.Errorf("failed to get user roles: %w", err)
@@ -283,7 +263,7 @@ func (r *UserRepository) AssignRole(ctx context.Context, userID, roleName string
 		ON CONFLICT (user_id, role_id) DO NOTHING
 	`
 
-	_, err := r.pool.Exec(ctx, query, userID, roleName)
+	_, err := r.db.Exec(ctx, query, userID, roleName)
 	if err != nil {
 		r.logger.Error().Err(err).
 			Str("user_id", userID).
@@ -307,7 +287,7 @@ func (r *UserRepository) RemoveRole(ctx context.Context, userID, roleName string
 		AND role_id = (SELECT id FROM roles WHERE name = $2)
 	`
 
-	result, err := r.pool.Exec(ctx, query, userID, roleName)
+	result, err := r.db.Exec(ctx, query, userID, roleName)
 	if err != nil {
 		r.logger.Error().Err(err).
 			Str("user_id", userID).
@@ -336,7 +316,7 @@ func (r *UserRepository) GetByExternalID(ctx context.Context, provider, external
 	`
 
 	var user domain.User
-	err := r.pool.QueryRow(ctx, query, provider, externalID).Scan(
+	err := r.db.QueryRow(ctx, query, provider, externalID).Scan(
 		&user.ID,
 		&user.Email,
 		&user.PasswordHash,
@@ -348,7 +328,7 @@ func (r *UserRepository) GetByExternalID(ctx context.Context, provider, external
 		&user.UpdatedAt,
 	)
 
-	if err == pgx.ErrNoRows {
+	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, domain.ErrUserNotFound
 	}
 	if err != nil {
@@ -369,7 +349,7 @@ func (r *UserRepository) FindOrCreateOAuthUser(ctx context.Context, provider, ex
 	if err == nil {
 		return user, false, nil // Existing user
 	}
-	if err != domain.ErrUserNotFound {
+	if !errors.Is(err, domain.ErrUserNotFound) {
 		return nil, false, err
 	}
 
@@ -390,7 +370,7 @@ func (r *UserRepository) FindOrCreateOAuthUser(ctx context.Context, provider, ex
 		}
 		existingUser.UpdatedAt = time.Now()
 
-		err = r.pool.QueryRow(ctx, updateQuery,
+		err = r.db.QueryRow(ctx, updateQuery,
 			provider, externalID, name, existingUser.UpdatedAt, existingUser.ID,
 		).Scan(&existingUser.UpdatedAt)
 		if err != nil {
@@ -404,7 +384,7 @@ func (r *UserRepository) FindOrCreateOAuthUser(ctx context.Context, provider, ex
 			Msg("Linked OAuth provider to existing user")
 		return existingUser, false, nil
 	}
-	if err != domain.ErrUserNotFound {
+	if !errors.Is(err, domain.ErrUserNotFound) {
 		return nil, false, err
 	}
 

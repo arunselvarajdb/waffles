@@ -26,7 +26,6 @@ trap cleanup EXIT
 
 echo "Step 1: Starting Mock MCP Server on port 9001..."
 go run test/cmd/test_mock_mcp_server.go 2>&1 | sed 's/^/  [MOCK] /' &
-MOCK_PID=$!
 sleep 2
 
 if ! curl -s http://localhost:9001/health > /dev/null; then
@@ -38,7 +37,6 @@ echo ""
 
 echo "Step 2: Starting MCP Gateway on port 8080..."
 go run cmd/server/main.go 2>&1 | sed 's/^/  [GATEWAY] /' &
-GATEWAY_PID=$!
 sleep 3
 
 if ! curl -s http://localhost:8080/health > /dev/null; then

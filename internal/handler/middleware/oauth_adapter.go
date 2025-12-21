@@ -18,6 +18,9 @@ func NewOAuthServiceAdapter(service *oauth.Service) *OAuthServiceAdapter {
 
 // ValidateBearerToken validates an OAuth bearer token
 func (a *OAuthServiceAdapter) ValidateBearerToken(ctx context.Context, token string) (*OAuthUserInfo, error) {
+	if a.service == nil {
+		return nil, nil
+	}
 	userInfo, err := a.service.ValidateBearerToken(ctx, token)
 	if err != nil {
 		return nil, err
@@ -32,25 +35,40 @@ func (a *OAuthServiceAdapter) ValidateBearerToken(ctx context.Context, token str
 
 // IsEnabled returns whether OAuth is enabled
 func (a *OAuthServiceAdapter) IsEnabled() bool {
+	if a.service == nil {
+		return false
+	}
 	return a.service.IsEnabled()
 }
 
 // GetIssuer returns the OIDC issuer URL
 func (a *OAuthServiceAdapter) GetIssuer() string {
+	if a.service == nil {
+		return ""
+	}
 	return a.service.GetIssuer()
 }
 
 // GetBaseURL returns the OAuth base URL
 func (a *OAuthServiceAdapter) GetBaseURL() string {
+	if a.service == nil {
+		return ""
+	}
 	return a.service.GetBaseURL()
 }
 
 // GetDefaultRole returns the default role for OAuth users
 func (a *OAuthServiceAdapter) GetDefaultRole() string {
+	if a.service == nil {
+		return ""
+	}
 	return a.service.GetDefaultRole()
 }
 
 // AutoCreateUsers returns whether to auto-create users
 func (a *OAuthServiceAdapter) AutoCreateUsers() bool {
+	if a.service == nil {
+		return false
+	}
 	return a.service.AutoCreateUsers()
 }

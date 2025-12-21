@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -12,12 +13,25 @@ import (
 
 // NamespaceHandler handles namespace API requests
 type NamespaceHandler struct {
-	namespaceRepo *repository.NamespaceRepository
+	namespaceRepo NamespaceRepoInterface
 	logger        logger.Logger
 }
 
 // NewNamespaceHandler creates a new namespace handler
 func NewNamespaceHandler(namespaceRepo *repository.NamespaceRepository, log logger.Logger) *NamespaceHandler {
+	var repo NamespaceRepoInterface
+	if namespaceRepo != nil {
+		repo = namespaceRepo
+	}
+
+	return &NamespaceHandler{
+		namespaceRepo: repo,
+		logger:        log,
+	}
+}
+
+// NewNamespaceHandlerWithInterface creates a new namespace handler with interface (for testing).
+func NewNamespaceHandlerWithInterface(namespaceRepo NamespaceRepoInterface, log logger.Logger) *NamespaceHandler {
 	return &NamespaceHandler{
 		namespaceRepo: namespaceRepo,
 		logger:        log,
@@ -66,7 +80,7 @@ func (h *NamespaceHandler) GetNamespace(c *gin.Context) {
 
 	ns, err := h.namespaceRepo.Get(c.Request.Context(), id)
 	if err != nil {
-		if err == domain.ErrNotFound {
+		if errors.Is(err, domain.ErrNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Namespace not found"})
 			return
 		}
@@ -91,7 +105,7 @@ func (h *NamespaceHandler) UpdateNamespace(c *gin.Context) {
 
 	ns, err := h.namespaceRepo.Update(c.Request.Context(), id, &req)
 	if err != nil {
-		if err == domain.ErrNotFound {
+		if errors.Is(err, domain.ErrNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Namespace not found"})
 			return
 		}
@@ -109,7 +123,7 @@ func (h *NamespaceHandler) DeleteNamespace(c *gin.Context) {
 	id := c.Param("id")
 
 	if err := h.namespaceRepo.Delete(c.Request.Context(), id); err != nil {
-		if err == domain.ErrNotFound {
+		if errors.Is(err, domain.ErrNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Namespace not found"})
 			return
 		}
@@ -135,7 +149,7 @@ func (h *NamespaceHandler) AddServer(c *gin.Context) {
 	// Verify namespace exists
 	_, err := h.namespaceRepo.Get(c.Request.Context(), namespaceID)
 	if err != nil {
-		if err == domain.ErrNotFound {
+		if errors.Is(err, domain.ErrNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Namespace not found"})
 			return
 		}
@@ -163,7 +177,7 @@ func (h *NamespaceHandler) RemoveServer(c *gin.Context) {
 	serverID := c.Param("server_id")
 
 	if err := h.namespaceRepo.RemoveServerFromNamespace(c.Request.Context(), serverID, namespaceID); err != nil {
-		if err == domain.ErrNotFound {
+		if errors.Is(err, domain.ErrNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Server not found in namespace"})
 			return
 		}
@@ -216,7 +230,7 @@ func (h *NamespaceHandler) SetRoleAccess(c *gin.Context) {
 	// Get role ID from role name
 	roleID, err := h.namespaceRepo.GetRoleIDByName(c.Request.Context(), req.RoleName)
 	if err != nil {
-		if err == domain.ErrNotFound {
+		if errors.Is(err, domain.ErrNotFound) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Role not found"})
 			return
 		}
@@ -228,7 +242,7 @@ func (h *NamespaceHandler) SetRoleAccess(c *gin.Context) {
 	// Verify namespace exists
 	_, err = h.namespaceRepo.Get(c.Request.Context(), namespaceID)
 	if err != nil {
-		if err == domain.ErrNotFound {
+		if errors.Is(err, domain.ErrNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Namespace not found"})
 			return
 		}
@@ -261,7 +275,7 @@ func (h *NamespaceHandler) RemoveRoleAccess(c *gin.Context) {
 	roleID := c.Param("role_id")
 
 	if err := h.namespaceRepo.RemoveRoleNamespaceAccess(c.Request.Context(), roleID, namespaceID); err != nil {
-		if err == domain.ErrNotFound {
+		if errors.Is(err, domain.ErrNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Role access not found"})
 			return
 		}

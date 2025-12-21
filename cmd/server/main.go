@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"embed"
 	"flag"
 	"fmt"
 	"os"
@@ -16,9 +15,6 @@ import (
 	"github.com/waffles/mcp-gateway/internal/server"
 	"github.com/waffles/mcp-gateway/pkg/logger"
 )
-
-//go:embed all:dist
-var webAppFS embed.FS
 
 var (
 	version    = "dev"
@@ -84,7 +80,7 @@ func main() {
 	}
 
 	// Create HTTP server
-	srv := server.New(cfg, db, log, metricsRegistry, metricsServer, webAppFS)
+	srv := server.New(cfg, db, log, metricsRegistry, metricsServer)
 	srv.SetupRoutes()
 
 	// Create context that listens for shutdown signals

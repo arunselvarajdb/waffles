@@ -1,10 +1,12 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+
 	"github.com/waffles/mcp-gateway/internal/domain"
 	"github.com/waffles/mcp-gateway/internal/handler/middleware"
 	"github.com/waffles/mcp-gateway/internal/service/registry"
@@ -16,13 +18,32 @@ import (
 
 // RegistryHandler handles HTTP requests for MCP server registry
 type RegistryHandler struct {
-	service       *registry.Service
-	accessService *serveraccess.Service
+	service       RegistryServiceInterface
+	accessService ServerAccessServiceInterface
 	logger        logger.Logger
 }
 
 // NewRegistryHandler creates a new registry handler
 func NewRegistryHandler(service *registry.Service, accessService *serveraccess.Service, log logger.Logger) *RegistryHandler {
+	var svc RegistryServiceInterface
+	var accessSvc ServerAccessServiceInterface
+
+	if service != nil {
+		svc = service
+	}
+	if accessService != nil {
+		accessSvc = accessService
+	}
+
+	return &RegistryHandler{
+		service:       svc,
+		accessService: accessSvc,
+		logger:        log,
+	}
+}
+
+// NewRegistryHandlerWithInterfaces creates a new registry handler with interface dependencies (for testing).
+func NewRegistryHandlerWithInterfaces(service RegistryServiceInterface, accessService ServerAccessServiceInterface, log logger.Logger) *RegistryHandler {
 	return &RegistryHandler{
 		service:       service,
 		accessService: accessService,
@@ -167,7 +188,7 @@ func (h *RegistryHandler) GetServer(c *gin.Context) {
 
 	server, err := h.service.GetServer(c.Request.Context(), id)
 	if err != nil {
-		if err == domain.ErrServerNotFound {
+		if errors.Is(err, domain.ErrServerNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{
 				"error": "Server not found",
 			})
@@ -204,7 +225,7 @@ func (h *RegistryHandler) UpdateServer(c *gin.Context) {
 
 	server, err := h.service.UpdateServer(c.Request.Context(), id, &req)
 	if err != nil {
-		if err == domain.ErrServerNotFound {
+		if errors.Is(err, domain.ErrServerNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{
 				"error": "Server not found",
 			})
@@ -233,7 +254,7 @@ func (h *RegistryHandler) DeleteServer(c *gin.Context) {
 
 	err := h.service.DeleteServer(c.Request.Context(), id)
 	if err != nil {
-		if err == domain.ErrServerNotFound {
+		if errors.Is(err, domain.ErrServerNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{
 				"error": "Server not found",
 			})
@@ -275,7 +296,7 @@ func (h *RegistryHandler) ToggleServer(c *gin.Context) {
 
 	server, err := h.service.ToggleServer(c.Request.Context(), id, req.IsActive)
 	if err != nil {
-		if err == domain.ErrServerNotFound {
+		if errors.Is(err, domain.ErrServerNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{
 				"error": "Server not found",
 			})
@@ -327,7 +348,7 @@ func (h *RegistryHandler) CheckHealth(c *gin.Context) {
 	// Trigger health check
 	err := h.service.CheckHealth(c.Request.Context(), id)
 	if err != nil {
-		if err == domain.ErrServerNotFound {
+		if errors.Is(err, domain.ErrServerNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{
 				"error": "Server not found",
 			})

@@ -41,7 +41,7 @@ type MCPServer struct {
 	Description         string          `json:"description"`
 	URL                 string          `json:"url"`
 	ProtocolVersion     string          `json:"protocol_version"`
-	Transport           TransportType   `json:"transport"`                     // http or sse
+	Transport           TransportType   `json:"transport"` // http or sse
 	AuthType            ServerAuthType  `json:"auth_type"`
 	AuthConfig          json.RawMessage `json:"auth_config,omitempty"` // Encrypted credentials
 	HealthCheckURL      string          `json:"health_check_url,omitempty"`
@@ -80,20 +80,20 @@ type ServerCreate struct {
 
 // ServerUpdate represents the data that can be updated for an MCP server
 type ServerUpdate struct {
-	Name                *string          `json:"name,omitempty" validate:"omitempty,min=3,max=255"`
-	Description         *string          `json:"description,omitempty"`
-	URL                 *string          `json:"url,omitempty" validate:"omitempty,url"`
-	ProtocolVersion     *string          `json:"protocol_version,omitempty"`
-	AuthType            *ServerAuthType  `json:"auth_type,omitempty"`
-	AuthConfig          json.RawMessage  `json:"auth_config,omitempty"`
-	HealthCheckURL      *string          `json:"health_check_url,omitempty"`
-	HealthCheckInterval *int             `json:"health_check_interval,omitempty" validate:"omitempty,min=10"`
-	TimeoutSeconds      *int             `json:"timeout_seconds,omitempty" validate:"omitempty,min=1,max=300"`
-	MaxConnections      *int             `json:"max_connections,omitempty" validate:"omitempty,min=1"`
-	IsActive            *bool            `json:"is_active,omitempty"`
-	Tags                *[]string        `json:"tags,omitempty"`
-	AllowedTools        *[]string        `json:"allowed_tools,omitempty"` // List of tool names users can access (empty = all)
-	Metadata            json.RawMessage  `json:"metadata,omitempty"`
+	Name                *string         `json:"name,omitempty" validate:"omitempty,min=3,max=255"`
+	Description         *string         `json:"description,omitempty"`
+	URL                 *string         `json:"url,omitempty" validate:"omitempty,url"`
+	ProtocolVersion     *string         `json:"protocol_version,omitempty"`
+	AuthType            *ServerAuthType `json:"auth_type,omitempty"`
+	AuthConfig          json.RawMessage `json:"auth_config,omitempty"`
+	HealthCheckURL      *string         `json:"health_check_url,omitempty"`
+	HealthCheckInterval *int            `json:"health_check_interval,omitempty" validate:"omitempty,min=10"`
+	TimeoutSeconds      *int            `json:"timeout_seconds,omitempty" validate:"omitempty,min=1,max=300"`
+	MaxConnections      *int            `json:"max_connections,omitempty" validate:"omitempty,min=1"`
+	IsActive            *bool           `json:"is_active,omitempty"`
+	Tags                *[]string       `json:"tags,omitempty"`
+	AllowedTools        *[]string       `json:"allowed_tools,omitempty"` // List of tool names users can access (empty = all)
+	Metadata            json.RawMessage `json:"metadata,omitempty"`
 }
 
 // ServerHealth represents the health check result for a server

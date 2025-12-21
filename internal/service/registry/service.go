@@ -264,10 +264,10 @@ func (s *Service) GetHealthStatus(ctx context.Context, serverID string) (*domain
 
 // TestConnectionRequest represents a connection test request
 type TestConnectionRequest struct {
-	URL              string `json:"url"`
-	Transport        string `json:"transport"`
-	ProtocolVersion  string `json:"protocol_version"`
-	TimeoutSeconds   int    `json:"timeout"`
+	URL             string `json:"url"`
+	Transport       string `json:"transport"`
+	ProtocolVersion string `json:"protocol_version"`
+	TimeoutSeconds  int    `json:"timeout"`
 }
 
 // TestConnectionResult represents the result of a connection test
@@ -357,7 +357,11 @@ func (s *Service) testHTTPTransport(ctx context.Context, baseURL string) *TestCo
 
 	// Try to get tools
 	toolsURL := baseURL + "/tools/list"
-	toolsReq, _ := http.NewRequestWithContext(ctx, "POST", toolsURL, nil)
+	toolsReq, err := http.NewRequestWithContext(ctx, "POST", toolsURL, nil)
+	if err != nil {
+		// Skip tools listing if request creation fails
+		return result
+	}
 	toolsReq.Header.Set("Content-Type", "application/json")
 	toolsResp, err := client.Do(toolsReq)
 	if err == nil && toolsResp.StatusCode < 400 {
@@ -405,7 +409,11 @@ func (s *Service) testStreamableHTTPTransport(ctx context.Context, baseURL strin
 		"id": 1,
 	}
 
-	body, _ := json.Marshal(initPayload)
+	body, err := json.Marshal(initPayload)
+	if err != nil {
+		result.ErrorMessage = fmt.Sprintf("Failed to marshal request: %v", err)
+		return result
+	}
 	req, err := http.NewRequestWithContext(ctx, "POST", baseURL, bytes.NewReader(body))
 	if err != nil {
 		result.ErrorMessage = fmt.Sprintf("Failed to create request: %v", err)

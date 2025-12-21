@@ -20,9 +20,9 @@ import (
 // APITestSuite is the main test suite for API integration tests
 type APITestSuite struct {
 	suite.Suite
-	baseURL    string
-	client     *http.Client
-	serverIDs  map[string]string // Track created server IDs for cleanup
+	baseURL   string
+	client    *http.Client
+	serverIDs map[string]string // Track created server IDs for cleanup
 }
 
 // SetupSuite runs once before all tests

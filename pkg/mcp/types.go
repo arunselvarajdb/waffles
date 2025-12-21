@@ -7,7 +7,7 @@ const ProtocolVersion = "1.0.0"
 
 // InitializeRequest represents the MCP initialize request
 type InitializeRequest struct {
-	ProtocolVersion string     `json:"protocolVersion"`
+	ProtocolVersion string       `json:"protocolVersion"`
 	Capabilities    Capabilities `json:"capabilities"`
 	ClientInfo      ClientInfo   `json:"clientInfo"`
 }
@@ -120,8 +120,8 @@ type PromptsListResponse struct {
 
 // Prompt represents an MCP prompt
 type Prompt struct {
-	Name        string          `json:"name"`
-	Description string          `json:"description,omitempty"`
+	Name        string           `json:"name"`
+	Description string           `json:"description,omitempty"`
 	Arguments   []PromptArgument `json:"arguments,omitempty"`
 }
 

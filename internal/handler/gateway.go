@@ -3,14 +3,17 @@ package handler
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/httputil"
 	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
+
 	"github.com/waffles/mcp-gateway/internal/domain"
 	"github.com/waffles/mcp-gateway/internal/handler/middleware"
 	"github.com/waffles/mcp-gateway/internal/service/gateway"
@@ -61,18 +64,82 @@ type ToolCallParams struct {
 
 // GatewayHandler handles MCP gateway requests
 type GatewayHandler struct {
-	service       *gateway.Service
-	accessService *serveraccess.Service
+	service       GatewayServiceInterface
+	accessService ServerAccessServiceInterface
 	logger        logger.Logger
 }
 
 // NewGatewayHandler creates a new gateway handler
 func NewGatewayHandler(service *gateway.Service, accessService *serveraccess.Service, log logger.Logger) *GatewayHandler {
+	var svc GatewayServiceInterface
+	var accessSvc ServerAccessServiceInterface
+
+	if service != nil {
+		svc = &gatewayServiceAdapter{service: service}
+	}
+	if accessService != nil {
+		accessSvc = accessService
+	}
+
+	return &GatewayHandler{
+		service:       svc,
+		accessService: accessSvc,
+		logger:        log,
+	}
+}
+
+// NewGatewayHandlerWithInterface creates a new gateway handler with interfaces (for testing).
+func NewGatewayHandlerWithInterface(service GatewayServiceInterface, accessService ServerAccessServiceInterface, log logger.Logger) *GatewayHandler {
 	return &GatewayHandler{
 		service:       service,
 		accessService: accessService,
 		logger:        log,
 	}
+}
+
+// gatewayServiceAdapter adapts gateway.Service to GatewayServiceInterface.
+type gatewayServiceAdapter struct {
+	service *gateway.Service
+}
+
+func (a *gatewayServiceAdapter) ProxyToServer(ctx context.Context, serverID string) (*httputil.ReverseProxy, *domain.MCPServer, error) {
+	return a.service.ProxyToServer(ctx, serverID)
+}
+
+func (a *gatewayServiceAdapter) GetServerInfo(ctx context.Context, serverID string) (*domain.MCPServer, error) {
+	return a.service.GetServerInfo(ctx, serverID)
+}
+
+func (a *gatewayServiceAdapter) Initialize(ctx context.Context, serverID string) (*domain.MCPServer, error) {
+	return a.service.Initialize(ctx, serverID)
+}
+
+func (a *gatewayServiceAdapter) GetTransportType(ctx context.Context, serverID string) (domain.TransportType, *domain.MCPServer, error) {
+	return a.service.GetTransportType(ctx, serverID)
+}
+
+func (a *gatewayServiceAdapter) CallSSE(ctx context.Context, serverID string, method string, params interface{}) (json.RawMessage, error) {
+	return a.service.CallSSE(ctx, serverID, method, params)
+}
+
+func (a *gatewayServiceAdapter) CallStreamableHTTP(ctx context.Context, serverID string, method string, params interface{}) (json.RawMessage, error) {
+	return a.service.CallStreamableHTTP(ctx, serverID, method, params)
+}
+
+func (a *gatewayServiceAdapter) InitializeStreamableHTTP(ctx context.Context, serverID string) (*MCPSession, error) {
+	session, err := a.service.InitializeStreamableHTTP(ctx, serverID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &MCPSession{
+		SessionID:       session.SessionID,
+		ProtocolVersion: session.ProtocolVersion,
+	}, nil
+}
+
+func (a *gatewayServiceAdapter) TerminateStreamableHTTP(ctx context.Context, serverID string) error {
+	return a.service.TerminateStreamableHTTP(ctx, serverID)
 }
 
 // ProxyRequest is a catch-all handler that proxies requests to MCP servers

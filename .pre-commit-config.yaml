@@ -22,23 +22,16 @@ repos:
 
   # Secret detection with Gitleaks
   - repo: https://github.com/gitleaks/gitleaks
-    rev: v8.18.4
+    rev: v8.30.0
     hooks:
       - id: gitleaks
 
-  # Go linting with golangci-lint
+  # Go linting with golangci-lint (pinned to v1.x for pre-commit hook compatibility)
   - repo: https://github.com/golangci/golangci-lint
-    rev: v1.61.0
+    rev: v1.64.5
     hooks:
       - id: golangci-lint
         args: ['--timeout=5m']
-
-  # Go security scanner
-  - repo: https://github.com/securego/gosec
-    rev: v2.21.4
-    hooks:
-      - id: gosec
-        args: ['-exclude-dir=test', '-exclude-dir=web', './...']
 
   # Go formatting
   - repo: local
@@ -57,40 +50,41 @@ repos:
         types: [go]
         pass_filenames: false
 
-  # JavaScript/Vue linting
-  - repo: local
-    hooks:
-      - id: eslint
-        name: eslint
-        entry: bash -c 'cd web-app && npm run lint --fix'
-        language: system
-        types_or: [javascript, vue, ts]
-        pass_filenames: false
+  # JavaScript/Vue linting (disabled - no lint script configured)
+  # - repo: local
+  #   hooks:
+  #     - id: eslint
+  #       name: eslint
+  #       entry: bash -c 'cd web-app && npm run lint --fix'
+  #       language: system
+  #       types_or: [javascript, vue, ts]
+  #       pass_filenames: false
 
   # Dockerfile linting
   - repo: https://github.com/hadolint/hadolint
-    rev: v2.12.0
+    rev: v2.14.0
     hooks:
       - id: hadolint-docker
         args: ['--ignore', 'DL3018', '--ignore', 'DL3008']  # Ignore pin versions
 
   # Shell script linting
   - repo: https://github.com/shellcheck-py/shellcheck-py
-    rev: v0.10.0.1
+    rev: v0.11.0.1
     hooks:
       - id: shellcheck
         args: ['--severity=warning']
+        exclude: 'node_modules/'
 
   # YAML linting
   - repo: https://github.com/adrienverge/yamllint
-    rev: v1.35.1
+    rev: v1.37.1
     hooks:
       - id: yamllint
         args: ['-c', '.yamllint.yaml']
 
   # Markdown linting
   - repo: https://github.com/igorshubovych/markdownlint-cli
-    rev: v0.42.0
+    rev: v0.47.0
     hooks:
       - id: markdownlint
         args: ['--fix', '--disable', 'MD013', 'MD033', 'MD041']

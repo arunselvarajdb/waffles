@@ -10,6 +10,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+
 	"github.com/waffles/mcp-gateway/internal/domain"
 	"github.com/waffles/mcp-gateway/internal/service/audit"
 )
@@ -120,12 +121,10 @@ func AuditMiddleware(auditService *audit.Service) gin.HandlerFunc {
 		}
 
 		// Log asynchronously to avoid blocking response
-		// Use background context since request context will be cancelled
+		// Use background context since request context will be canceled
 		go func() {
 			ctx := context.Background()
-			if err := auditService.Log(ctx, auditLog); err != nil {
-				// Error already logged in service
-			}
+			_ = auditService.Log(ctx, auditLog) // Error already logged in service
 		}()
 	}
 }

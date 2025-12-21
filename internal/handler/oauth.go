@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
+
 	"github.com/waffles/mcp-gateway/internal/handler/middleware"
 	"github.com/waffles/mcp-gateway/internal/repository"
 	"github.com/waffles/mcp-gateway/internal/service/oauth"
@@ -19,14 +20,33 @@ const (
 
 // OAuthHandler handles OAuth/SSO authentication requests
 type OAuthHandler struct {
-	oauthService *oauth.Service
-	userRepo     *repository.UserRepository
+	oauthService OAuthServiceInterface
+	userRepo     OAuthUserRepoInterface
 	logger       logger.Logger
 	frontendURL  string // URL to redirect to after successful login
 }
 
 // NewOAuthHandler creates a new OAuth handler
 func NewOAuthHandler(oauthService *oauth.Service, userRepo *repository.UserRepository, log logger.Logger, frontendURL string) *OAuthHandler {
+	var svc OAuthServiceInterface
+	var repo OAuthUserRepoInterface
+	if oauthService != nil {
+		svc = oauthService
+	}
+	if userRepo != nil {
+		repo = userRepo
+	}
+
+	return &OAuthHandler{
+		oauthService: svc,
+		userRepo:     repo,
+		logger:       log,
+		frontendURL:  frontendURL,
+	}
+}
+
+// NewOAuthHandlerWithInterface creates a new OAuth handler with interfaces for testing.
+func NewOAuthHandlerWithInterface(oauthService OAuthServiceInterface, userRepo OAuthUserRepoInterface, log logger.Logger, frontendURL string) *OAuthHandler {
 	return &OAuthHandler{
 		oauthService: oauthService,
 		userRepo:     userRepo,
@@ -226,12 +246,6 @@ func (h *OAuthHandler) Callback(c *gin.Context) {
 		Bool("is_new_user", isNew).
 		Msg("SSO login successful")
 
-	// Redirect to frontend
-	redirectURL := h.frontendURL
-	if redirectURL == "" {
-		redirectURL = "/"
-	}
-
 	// Determine redirect based on role
 	hasAdmin := false
 	for _, role := range roles {
@@ -241,6 +255,8 @@ func (h *OAuthHandler) Callback(c *gin.Context) {
 		}
 	}
 
+	// Redirect to appropriate frontend page
+	var redirectURL string
 	if hasAdmin {
 		redirectURL = h.frontendURL + "/admin"
 	} else {

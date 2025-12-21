@@ -4,18 +4,24 @@ import (
 	"context"
 
 	"github.com/waffles/mcp-gateway/internal/domain"
-	"github.com/waffles/mcp-gateway/internal/repository"
 	"github.com/waffles/mcp-gateway/pkg/logger"
 )
 
+// Repository defines the interface for audit log data access.
+type Repository interface {
+	Create(ctx context.Context, log *domain.AuditLog) error
+	Get(ctx context.Context, id string) (*domain.AuditLog, error)
+	List(ctx context.Context, filter domain.AuditLogFilter) ([]*domain.AuditLog, error)
+}
+
 // Service handles audit logging operations
 type Service struct {
-	repo   *repository.AuditRepository
+	repo   Repository
 	logger logger.Logger
 }
 
 // NewService creates a new audit service
-func NewService(repo *repository.AuditRepository, log logger.Logger) *Service {
+func NewService(repo Repository, log logger.Logger) *Service {
 	return &Service{
 		repo:   repo,
 		logger: log,

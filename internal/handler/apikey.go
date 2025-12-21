@@ -1,10 +1,13 @@
 package handler
 
 import (
+	"context"
+	"errors"
 	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
+
 	"github.com/waffles/mcp-gateway/internal/domain"
 	"github.com/waffles/mcp-gateway/internal/handler/middleware"
 	"github.com/waffles/mcp-gateway/internal/repository"
@@ -13,16 +16,114 @@ import (
 
 // APIKeyHandler handles API key-related HTTP requests
 type APIKeyHandler struct {
-	apiKeyRepo *repository.APIKeyRepository
+	apiKeyRepo APIKeyRepositoryInterface
 	logger     logger.Logger
 }
 
 // NewAPIKeyHandler creates a new API key handler
 func NewAPIKeyHandler(apiKeyRepo *repository.APIKeyRepository, log logger.Logger) *APIKeyHandler {
+	var repo APIKeyRepositoryInterface
+	if apiKeyRepo != nil {
+		repo = &apiKeyRepoAdapter{repo: apiKeyRepo}
+	}
+
+	return &APIKeyHandler{
+		apiKeyRepo: repo,
+		logger:     log,
+	}
+}
+
+// NewAPIKeyHandlerWithInterface creates a new API key handler with interface (for testing).
+func NewAPIKeyHandlerWithInterface(apiKeyRepo APIKeyRepositoryInterface, log logger.Logger) *APIKeyHandler {
 	return &APIKeyHandler{
 		apiKeyRepo: apiKeyRepo,
 		logger:     log,
 	}
+}
+
+// apiKeyRepoAdapter adapts the repository.APIKeyRepository to APIKeyRepositoryInterface.
+type apiKeyRepoAdapter struct {
+	repo *repository.APIKeyRepository
+}
+
+func (a *apiKeyRepoAdapter) Create(ctx context.Context, userID, name string, expiresAt *time.Time) (*APIKey, string, error) {
+	key, plainKey, err := a.repo.Create(ctx, userID, name, expiresAt)
+	if err != nil {
+		return nil, "", err
+	}
+
+	return &APIKey{
+		ID:         key.ID,
+		UserID:     key.UserID,
+		Name:       key.Name,
+		KeyPrefix:  key.KeyPrefix,
+		ExpiresAt:  key.ExpiresAt,
+		LastUsedAt: key.LastUsedAt,
+		CreatedAt:  key.CreatedAt,
+	}, plainKey, nil
+}
+
+func (a *apiKeyRepoAdapter) GetByID(ctx context.Context, keyID string) (*APIKey, error) {
+	key, err := a.repo.GetByID(ctx, keyID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &APIKey{
+		ID:         key.ID,
+		UserID:     key.UserID,
+		Name:       key.Name,
+		KeyPrefix:  key.KeyPrefix,
+		ExpiresAt:  key.ExpiresAt,
+		LastUsedAt: key.LastUsedAt,
+		CreatedAt:  key.CreatedAt,
+	}, nil
+}
+
+func (a *apiKeyRepoAdapter) GetByHash(ctx context.Context, keyHash string) (*APIKey, error) {
+	key, err := a.repo.GetByHash(ctx, keyHash)
+	if err != nil {
+		return nil, err
+	}
+
+	return &APIKey{
+		ID:         key.ID,
+		UserID:     key.UserID,
+		Name:       key.Name,
+		KeyPrefix:  key.KeyPrefix,
+		ExpiresAt:  key.ExpiresAt,
+		LastUsedAt: key.LastUsedAt,
+		CreatedAt:  key.CreatedAt,
+	}, nil
+}
+
+func (a *apiKeyRepoAdapter) ListByUser(ctx context.Context, userID string) ([]*APIKey, error) {
+	keys, err := a.repo.ListByUser(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]*APIKey, len(keys))
+	for i, key := range keys {
+		result[i] = &APIKey{
+			ID:         key.ID,
+			UserID:     key.UserID,
+			Name:       key.Name,
+			KeyPrefix:  key.KeyPrefix,
+			ExpiresAt:  key.ExpiresAt,
+			LastUsedAt: key.LastUsedAt,
+			CreatedAt:  key.CreatedAt,
+		}
+	}
+
+	return result, nil
+}
+
+func (a *apiKeyRepoAdapter) Delete(ctx context.Context, keyID, userID string) error {
+	return a.repo.Delete(ctx, keyID, userID)
+}
+
+func (a *apiKeyRepoAdapter) UpdateLastUsed(ctx context.Context, keyID string) error {
+	return a.repo.UpdateLastUsed(ctx, keyID)
 }
 
 // CreateAPIKeyRequest represents the create API key request body
@@ -168,7 +269,7 @@ func (h *APIKeyHandler) DeleteAPIKey(c *gin.Context) {
 
 	err := h.apiKeyRepo.Delete(c.Request.Context(), keyID, userID)
 	if err != nil {
-		if err == domain.ErrAPIKeyNotFound {
+		if errors.Is(err, domain.ErrAPIKeyNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{
 				"error":   "not_found",
 				"message": "API key not found",
@@ -215,7 +316,7 @@ func (h *APIKeyHandler) GetAPIKey(c *gin.Context) {
 
 	key, err := h.apiKeyRepo.GetByID(c.Request.Context(), keyID)
 	if err != nil {
-		if err == domain.ErrAPIKeyNotFound {
+		if errors.Is(err, domain.ErrAPIKeyNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{
 				"error":   "not_found",
 				"message": "API key not found",

@@ -10,9 +10,10 @@ import (
 	"net/http"
 	"strings"
 
+	"golang.org/x/oauth2"
+
 	"github.com/waffles/mcp-gateway/internal/config"
 	"github.com/waffles/mcp-gateway/pkg/logger"
-	"golang.org/x/oauth2"
 )
 
 // ProviderOIDC is the provider name stored for OIDC-authenticated users

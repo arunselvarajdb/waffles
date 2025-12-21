@@ -31,7 +31,7 @@ func main() {
 	}
 	defer rows.Close()
 
-	fmt.Println("=== Recent Audit Logs ===\n")
+	fmt.Println("=== Recent Audit Logs ===")
 	count := 0
 	for rows.Next() {
 		var id, method, path, ipAddress string
