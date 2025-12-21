@@ -150,23 +150,33 @@ jobs:
           npm test -- --coverage --coverageReporters=text --coverageReporters=text-summary 2>&1 | tee test-output.txt
           test_exit_code=${PIPESTATUS[0]}
 
+          # Debug: show what we captured
+          echo "=== Test output preview ==="
+          cat test-output.txt | tail -20
+          echo "==========================="
+
           # Parse test results from Vitest output
-          # Format: "Tests  522 passed (522)" or "Tests  5 failed | 517 passed (522)"
-          if grep -q "Tests" test-output.txt; then
-            # Extract from the summary line
-            test_line=$(grep "Tests" test-output.txt | tail -1)
+          # Vitest format: "      Tests  522 passed (522)" (with leading whitespace)
+          # Use grep -E with more flexible pattern
+          test_line=$(grep -E "^\s*Tests\s+" test-output.txt | tail -1 || echo "")
+          echo "Test line found: '$test_line'"
 
-            # Extract total from parentheses
-            total_tests=$(echo "$test_line" | grep -oE '\([0-9]+\)' | tr -d '()' || echo "0")
+          if [ -n "$test_line" ]; then
+            # Extract total from parentheses at end: (522)
+            total_tests=$(echo "$test_line" | grep -oE '\([0-9]+\)$' | tr -d '()' || echo "0")
+            [ -z "$total_tests" ] && total_tests="0"
 
-            # Extract passed count
-            passed_tests=$(echo "$test_line" | grep -oE '[0-9]+ passed' | grep -oE '[0-9]+' || echo "0")
+            # Extract passed count: "522 passed"
+            passed_tests=$(echo "$test_line" | grep -oE '[0-9]+ passed' | head -1 | grep -oE '[0-9]+' || echo "0")
+            [ -z "$passed_tests" ] && passed_tests="0"
 
-            # Extract failed count (may not exist)
-            failed_tests=$(echo "$test_line" | grep -oE '[0-9]+ failed' | grep -oE '[0-9]+' || echo "0")
+            # Extract failed count (may not exist): "5 failed"
+            failed_tests=$(echo "$test_line" | grep -oE '[0-9]+ failed' | head -1 | grep -oE '[0-9]+' || echo "0")
+            [ -z "$failed_tests" ] && failed_tests="0"
 
-            # Extract skipped count (may not exist)
-            skipped_tests=$(echo "$test_line" | grep -oE '[0-9]+ skipped' | grep -oE '[0-9]+' || echo "0")
+            # Extract skipped count (may not exist): "3 skipped"
+            skipped_tests=$(echo "$test_line" | grep -oE '[0-9]+ skipped' | head -1 | grep -oE '[0-9]+' || echo "0")
+            [ -z "$skipped_tests" ] && skipped_tests="0"
           else
             total_tests="0"
             passed_tests="0"
@@ -175,9 +185,11 @@ jobs:
           fi
 
           # Parse coverage from text-summary - look for "All files" line
-          if grep -q "All files" test-output.txt; then
+          coverage_line=$(grep "All files" test-output.txt | head -1 || echo "")
+          if [ -n "$coverage_line" ]; then
             # Coverage format: "All files |   XX.XX |   XX.XX |   XX.XX |   XX.XX |"
-            coverage=$(grep "All files" test-output.txt | awk -F'|' '{print $2}' | tr -d ' ' || echo "0")
+            coverage=$(echo "$coverage_line" | awk -F'|' '{print $2}' | tr -d ' ' || echo "0")
+            [ -z "$coverage" ] && coverage="0"
           else
             coverage="0"
           fi
