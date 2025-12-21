@@ -300,11 +300,16 @@ jobs:
           go test -v -race -coverprofile=coverage.out -covermode=atomic ./... 2>&1 | tee test-output.txt
           test_exit_code=${PIPESTATUS[0]}
 
-          # Count tests
-          total_tests=$(grep -c "^--- PASS\|^--- FAIL\|^--- SKIP" test-output.txt || echo "0")
-          passed_tests=$(grep -c "^--- PASS" test-output.txt || echo "0")
-          failed_tests=$(grep -c "^--- FAIL" test-output.txt || echo "0")
-          skipped_tests=$(grep -c "^--- SKIP" test-output.txt || echo "0")
+          # Count tests - use grep with || true to prevent failure on no match
+          passed_tests=$(grep -c "^--- PASS" test-output.txt 2>/dev/null || true)
+          failed_tests=$(grep -c "^--- FAIL" test-output.txt 2>/dev/null || true)
+          skipped_tests=$(grep -c "^--- SKIP" test-output.txt 2>/dev/null || true)
+
+          # Ensure we have valid numbers (default to 0 if empty)
+          passed_tests=${passed_tests:-0}
+          failed_tests=${failed_tests:-0}
+          skipped_tests=${skipped_tests:-0}
+          total_tests=$((passed_tests + failed_tests + skipped_tests))
 
           echo "total_tests=$total_tests" >> $GITHUB_OUTPUT
           echo "passed_tests=$passed_tests" >> $GITHUB_OUTPUT
@@ -382,14 +387,16 @@ jobs:
           echo "| **Status** | $status_text |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
 
-          # Per-package breakdown
-          echo "<details>" >> $GITHUB_STEP_SUMMARY
-          echo "<summary>Per-package coverage breakdown</summary>" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          tail -20 coverage-summary.txt >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          echo "</details>" >> $GITHUB_STEP_SUMMARY
+          # Per-package breakdown (only if file exists)
+          if [ -f coverage-summary.txt ]; then
+            echo "<details>" >> $GITHUB_STEP_SUMMARY
+            echo "<summary>Per-package coverage breakdown</summary>" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            tail -20 coverage-summary.txt >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            echo "</details>" >> $GITHUB_STEP_SUMMARY
+          fi
 
       - name: Check coverage threshold
         run: |
