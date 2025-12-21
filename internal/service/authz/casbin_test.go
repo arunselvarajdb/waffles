@@ -7,6 +7,7 @@ import (
 	"github.com/casbin/casbin/v2/model"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	"github.com/waffles/mcp-gateway/pkg/logger"
 )
 
@@ -328,6 +329,33 @@ func TestCasbinService_GetEnforcer(t *testing.T) {
 	policies, err := enforcer.GetPolicy()
 	assert.NoError(t, err)
 	assert.NotEmpty(t, policies)
+}
+
+func TestNewCasbinService(t *testing.T) {
+	log := logger.NewNopLogger()
+
+	t.Run("returns error with invalid paths", func(t *testing.T) {
+		cfg := Config{
+			ModelPath:  "/non/existent/model.conf",
+			PolicyPath: "/non/existent/policy.csv",
+		}
+
+		svc, err := NewCasbinService(cfg, log)
+
+		assert.Error(t, err)
+		assert.Nil(t, svc)
+		assert.Contains(t, err.Error(), "failed to create Casbin enforcer")
+	})
+}
+
+func TestConfig(t *testing.T) {
+	cfg := Config{
+		ModelPath:  "/path/to/model.conf",
+		PolicyPath: "/path/to/policy.csv",
+	}
+
+	assert.Equal(t, "/path/to/model.conf", cfg.ModelPath)
+	assert.Equal(t, "/path/to/policy.csv", cfg.PolicyPath)
 }
 
 func TestKeyMatch2Pattern(t *testing.T) {

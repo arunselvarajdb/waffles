@@ -8,7 +8,7 @@ on:
 
 permissions:
   contents: read
-  pull-requests: read
+  security-events: write
 
 jobs:
   lint:
@@ -21,7 +21,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.22'
+          go-version: '1.24'
           cache: true
 
       - name: Verify go.mod and go.sum
@@ -56,15 +56,27 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.22'
+          go-version: '1.24'
           cache: true
 
-      - name: Run gosec Security Scanner
-        uses: securego/gosec@v2.21.4
-        with:
-          args: '-exclude-dir=test -exclude-dir=web -exclude-dir=node_modules -exclude-generated ./...'
+      - name: Install gosec
+        run: go install github.com/securego/gosec/v2/cmd/gosec@v2.21.4
 
-      - name: Run Trivy vulnerability scanner
+      - name: Run gosec Security Scanner
+        run: gosec -exclude-dir=test -exclude-dir=web -exclude-dir=node_modules -exclude-generated ./...
+
+      - name: Run Trivy vulnerability scanner (table output)
+        id: trivy
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'table'
+          output: 'trivy-results.txt'
+          severity: 'HIGH,CRITICAL'
+          exit-code: '0'
+
+      - name: Run Trivy vulnerability scanner (SARIF for GitHub Security)
         uses: aquasecurity/trivy-action@0.28.0
         with:
           scan-type: 'fs'
@@ -72,7 +84,85 @@ jobs:
           format: 'sarif'
           output: 'trivy-results.sarif'
           severity: 'HIGH,CRITICAL'
-          exit-code: '1'
+          exit-code: '0'
+
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+      - name: Write Trivy results to job summary
+        run: |
+          echo "## 🔒 Security Scan Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if grep -qE '(HIGH|CRITICAL)' trivy-results.txt 2>/dev/null; then
+            echo "### ⚠️ Vulnerabilities Found" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "HIGH or CRITICAL vulnerabilities detected!" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "<details>" >> $GITHUB_STEP_SUMMARY
+            echo "<summary>Click to expand scan results</summary>" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            cat trivy-results.txt >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            echo "</details>" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### ✅ No Vulnerabilities Found" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "No HIGH or CRITICAL vulnerabilities detected." >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Check for HIGH/CRITICAL vulnerabilities
+        run: |
+          if grep -qE '(HIGH|CRITICAL)' trivy-results.txt 2>/dev/null; then
+            echo "::error::HIGH or CRITICAL vulnerabilities found!"
+            cat trivy-results.txt
+            exit 1
+          else
+            echo "No HIGH or CRITICAL vulnerabilities found."
+          fi
+
+  frontend:
+    name: Frontend Build & Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: web-app/package-lock.json
+
+      - name: Install dependencies
+        run: cd web-app && npm ci
+
+      - name: Run tests with coverage
+        run: cd web-app && npm run test:coverage
+
+      - name: Upload frontend coverage report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: frontend-coverage-report
+          path: web-app/coverage/
+          retention-days: 7
+
+      - name: Upload frontend coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          directory: ./web-app/coverage/
+          flags: frontend
+          name: frontend-coverage
+          fail_ci_if_error: false
+
+      - name: Build frontend
+        run: cd web-app && npm run build
 
   test:
     name: Test
@@ -109,7 +199,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.22'
+          go-version: '1.24'
           cache: true
 
       - name: Download dependencies
@@ -124,25 +214,36 @@ jobs:
           DATABASE_NAME: test_db
           REDIS_HOST: localhost
           REDIS_PORT: 6379
-        run: |
-          go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
+        run: go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
 
-      - name: Check test coverage
+      - name: Generate HTML coverage report
         run: |
+          mkdir -p coverage
+          go tool cover -html=coverage.out -o coverage/index.html
+          go tool cover -func=coverage.out > coverage/coverage.txt
+          # Check coverage threshold
           coverage=$(go tool cover -func=coverage.out | grep total | awk '{print substr($3, 1, length($3)-1)}')
           echo "Total test coverage: ${coverage}%"
           threshold=50
           if (( $(echo "$coverage < $threshold" | bc -l) )); then
-            echo "Coverage ${coverage}% is below threshold ${threshold}%"
+            echo "::error::Coverage ${coverage}% is below threshold ${threshold}%"
             exit 1
           fi
+
+      - name: Upload backend coverage report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: backend-coverage-report
+          path: coverage/
+          retention-days: 7
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
         with:
           file: ./coverage.out
-          flags: unittests
-          name: codecov-umbrella
+          flags: backend
+          name: backend-coverage
           fail_ci_if_error: false
 
   build:
@@ -167,7 +268,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.22'
+          go-version: '1.24'
           cache: true
 
       - name: Build binary
@@ -201,22 +302,49 @@ jobs:
   summary:
     name: CI Summary
     runs-on: ubuntu-latest
-    needs: [lint, security, test, build]
+    needs: [lint, security, frontend, test, build]
     if: always()
     steps:
       - name: Check job results
         run: |
-          echo "Lint: ${{ needs.lint.result }}"
-          echo "Security: ${{ needs.security.result }}"
-          echo "Test: ${{ needs.test.result }}"
-          echo "Build: ${{ needs.build.result }}"
+          echo "## 📊 CI Pipeline Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Job | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
+
+          # Function to convert result to emoji
+          get_emoji() {
+            case "$1" in
+              success) echo "✅" ;;
+              failure) echo "❌" ;;
+              cancelled) echo "⏹️" ;;
+              skipped) echo "⏭️" ;;
+              *) echo "❓" ;;
+            esac
+          }
+
+          echo "| Lint | $(get_emoji ${{ needs.lint.result }}) ${{ needs.lint.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Security | $(get_emoji ${{ needs.security.result }}) ${{ needs.security.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Frontend | $(get_emoji ${{ needs.frontend.result }}) ${{ needs.frontend.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Test | $(get_emoji ${{ needs.test.result }}) ${{ needs.test.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Build | $(get_emoji ${{ needs.build.result }}) ${{ needs.build.result }} |" >> $GITHUB_STEP_SUMMARY
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          echo "### 📊 Coverage Reports" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Download coverage reports from the **Artifacts** section below:" >> $GITHUB_STEP_SUMMARY
+          echo "- **frontend-coverage-report** - Vue/Vitest HTML coverage" >> $GITHUB_STEP_SUMMARY
+          echo "- **backend-coverage-report** - Go HTML coverage" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
 
           if [ "${{ needs.lint.result }}" != "success" ] || \
              [ "${{ needs.security.result }}" != "success" ] || \
+             [ "${{ needs.frontend.result }}" != "success" ] || \
              [ "${{ needs.test.result }}" != "success" ] || \
              [ "${{ needs.build.result }}" != "success" ]; then
-            echo "❌ CI pipeline failed"
+            echo "### ❌ CI Pipeline Failed" >> $GITHUB_STEP_SUMMARY
             exit 1
           fi
 
-          echo "✅ All CI checks passed"
+          echo "### ✅ All CI Checks Passed" >> $GITHUB_STEP_SUMMARY

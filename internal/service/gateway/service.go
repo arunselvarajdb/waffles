@@ -12,27 +12,60 @@ import (
 
 	"github.com/waffles/mcp-gateway/internal/domain"
 	"github.com/waffles/mcp-gateway/internal/metrics"
-	"github.com/waffles/mcp-gateway/internal/repository"
 	"github.com/waffles/mcp-gateway/pkg/logger"
 )
 
+// contextKey is a custom type for context keys to avoid collisions
+type contextKey string
+
+// proxyStartTimeKey is the context key for tracking proxy start time
+const proxyStartTimeKey contextKey = "proxy_start_time"
+
+// ServerRepository defines the interface for server data access.
+type ServerRepository interface {
+	Get(ctx context.Context, id string) (*domain.MCPServer, error)
+}
+
+// SSEClientInterface defines the interface for SSE client operations.
+type SSEClientInterface interface {
+	Call(ctx context.Context, server *domain.MCPServer, method string, params interface{}) (json.RawMessage, error)
+}
+
+// StreamableHTTPClientInterface defines the interface for Streamable HTTP client operations.
+type StreamableHTTPClientInterface interface {
+	Call(ctx context.Context, server *domain.MCPServer, method string, params interface{}) (json.RawMessage, error)
+	Initialize(ctx context.Context, server *domain.MCPServer) (*MCPSession, error)
+	TerminateSession(ctx context.Context, server *domain.MCPServer) error
+}
+
 // Service handles MCP gateway operations using ReverseProxy
 type Service struct {
-	repo                 *repository.ServerRepository
+	repo                 ServerRepository
 	logger               logger.Logger
 	metrics              *metrics.Registry
-	sseClient            *SSEClient            // Legacy SSE client (deprecated)
-	streamableHTTPClient *StreamableHTTPClient // Streamable HTTP client (MCP 2025-11-25)
+	sseClient            SSEClientInterface            // Legacy SSE client (deprecated)
+	streamableHTTPClient StreamableHTTPClientInterface // Streamable HTTP client (MCP 2025-11-25)
 }
 
 // NewService creates a new gateway service
-func NewService(repo *repository.ServerRepository, log logger.Logger, metricsReg *metrics.Registry) *Service {
+func NewService(repo ServerRepository, log logger.Logger, metricsReg *metrics.Registry) *Service {
 	return &Service{
 		repo:                 repo,
 		logger:               log,
 		metrics:              metricsReg,
 		sseClient:            NewSSEClient(log, 30*time.Second),
 		streamableHTTPClient: NewStreamableHTTPClient(log, 30*time.Second),
+	}
+}
+
+// NewServiceWithClients creates a new gateway service with custom clients (useful for testing).
+func NewServiceWithClients(repo ServerRepository, log logger.Logger, metricsReg *metrics.Registry, sseClient SSEClientInterface, streamableHTTPClient StreamableHTTPClientInterface) *Service {
+	return &Service{
+		repo:                 repo,
+		logger:               log,
+		metrics:              metricsReg,
+		sseClient:            sseClient,
+		streamableHTTPClient: streamableHTTPClient,
 	}
 }
 
@@ -66,7 +99,7 @@ func (s *Service) ProxyToServer(
 
 			// Track start time for latency measurement
 			startTime := time.Now()
-			req = req.WithContext(context.WithValue(req.Context(), "proxy_start_time", startTime))
+			req = req.WithContext(context.WithValue(req.Context(), proxyStartTimeKey, startTime))
 
 			// Increment in-flight gauge
 			if s.metrics != nil {
@@ -123,7 +156,7 @@ func (s *Service) ProxyToServer(
 			s.metrics.GatewayRequestsInFlight.WithLabelValues(serverID, server.Name).Dec()
 
 			// Record request duration
-			if startTime, ok := resp.Request.Context().Value("proxy_start_time").(time.Time); ok {
+			if startTime, ok := resp.Request.Context().Value(proxyStartTimeKey).(time.Time); ok {
 				duration := time.Since(startTime).Seconds()
 				s.metrics.GatewayRequestDuration.WithLabelValues(serverID, server.Name).Observe(duration)
 			}
@@ -148,7 +181,7 @@ func (s *Service) ProxyToServer(
 			s.metrics.GatewayRequestsInFlight.WithLabelValues(serverID, server.Name).Dec()
 
 			// Record request duration even on error
-			if startTime, ok := r.Context().Value("proxy_start_time").(time.Time); ok {
+			if startTime, ok := r.Context().Value(proxyStartTimeKey).(time.Time); ok {
 				duration := time.Since(startTime).Seconds()
 				s.metrics.GatewayRequestDuration.WithLabelValues(serverID, server.Name).Observe(duration)
 			}

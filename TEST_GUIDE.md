@@ -117,7 +117,7 @@ func main() {
     ctx := context.Background()
     ctx = logger.WithRequestID(ctx, "req-123")
     ctx = logger.WithUserID(ctx, "user-456")
-    
+
     log.WithContext(ctx).Info().Msg("Log with context")
 
     // Test different levels
@@ -331,4 +331,3 @@ Once you implement more features, add:
 3. **Integration tests** - Full request/response cycle
 4. **Load tests** - Use k6
 5. **E2E tests** - Real user workflows
-

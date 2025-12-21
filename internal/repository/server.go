@@ -2,25 +2,26 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
+
 	"github.com/waffles/mcp-gateway/internal/domain"
 	"github.com/waffles/mcp-gateway/pkg/logger"
 )
 
 // ServerRepository handles MCP server data persistence
 type ServerRepository struct {
-	pool   *pgxpool.Pool
+	db     DBTX
 	logger logger.Logger
 }
 
 // NewServerRepository creates a new server repository
-func NewServerRepository(pool *pgxpool.Pool, log logger.Logger) *ServerRepository {
+func NewServerRepository(db DBTX, log logger.Logger) *ServerRepository {
 	return &ServerRepository{
-		pool:   pool,
+		db:     db,
 		logger: log,
 	}
 }
@@ -43,7 +44,7 @@ func (r *ServerRepository) Create(ctx context.Context, req *domain.ServerCreate)
 	}
 
 	var server domain.MCPServer
-	err := r.pool.QueryRow(ctx, query,
+	err := r.db.QueryRow(ctx, query,
 		req.Name,
 		req.Description,
 		req.URL,
@@ -141,7 +142,7 @@ func (r *ServerRepository) List(ctx context.Context, filter *domain.ServerFilter
 		}
 	}
 
-	rows, err := r.pool.Query(ctx, query, args...)
+	rows, err := r.db.Query(ctx, query, args...)
 	if err != nil {
 		r.logger.Error().Err(err).Msg("Failed to list servers")
 		return nil, fmt.Errorf("failed to list servers: %w", err)
@@ -186,14 +187,14 @@ func (r *ServerRepository) Get(ctx context.Context, id string) (*domain.MCPServe
 	`
 
 	var server domain.MCPServer
-	err := r.pool.QueryRow(ctx, query, id).Scan(
+	err := r.db.QueryRow(ctx, query, id).Scan(
 		&server.ID, &server.Name, &server.Description, &server.URL, &server.ProtocolVersion, &server.Transport,
 		&server.AuthType, &server.AuthConfig, &server.HealthCheckURL, &server.HealthCheckInterval,
 		&server.TimeoutSeconds, &server.MaxConnections, &server.IsActive, &server.Tags, &server.AllowedTools, &server.Metadata,
 		&server.CreatedAt, &server.UpdatedAt,
 	)
 
-	if err == pgx.ErrNoRows {
+	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, domain.ErrServerNotFound
 	}
 	if err != nil {
@@ -269,7 +270,7 @@ func (r *ServerRepository) Update(ctx context.Context, id string, req *domain.Se
 	`
 
 	current.UpdatedAt = time.Now()
-	err = r.pool.QueryRow(ctx, query,
+	err = r.db.QueryRow(ctx, query,
 		current.Name, current.Description, current.URL, current.ProtocolVersion, current.Transport,
 		current.AuthType, current.AuthConfig, current.HealthCheckURL,
 		current.HealthCheckInterval, current.TimeoutSeconds, current.MaxConnections,
@@ -293,7 +294,7 @@ func (r *ServerRepository) Update(ctx context.Context, id string, req *domain.Se
 func (r *ServerRepository) Delete(ctx context.Context, id string) error {
 	query := `DELETE FROM mcp_servers WHERE id = $1`
 
-	result, err := r.pool.Exec(ctx, query, id)
+	result, err := r.db.Exec(ctx, query, id)
 	if err != nil {
 		r.logger.Error().Err(err).Str("server_id", id).Msg("Failed to delete server")
 		return fmt.Errorf("failed to delete server: %w", err)
@@ -319,12 +320,12 @@ func (r *ServerRepository) GetHealthStatus(ctx context.Context, serverID string)
 	`
 
 	var health domain.ServerHealth
-	err := r.pool.QueryRow(ctx, query, serverID).Scan(
+	err := r.db.QueryRow(ctx, query, serverID).Scan(
 		&health.ID, &health.ServerID, &health.Status,
 		&health.ResponseTimeMs, &health.ErrorMessage, &health.CheckedAt,
 	)
 
-	if err == pgx.ErrNoRows {
+	if errors.Is(err, pgx.ErrNoRows) {
 		// No health check yet - return default status
 		return &domain.ServerHealth{
 			ServerID:  serverID,
@@ -348,7 +349,7 @@ func (r *ServerRepository) SaveHealthStatus(ctx context.Context, health *domain.
 		RETURNING id
 	`
 
-	err := r.pool.QueryRow(ctx, query,
+	err := r.db.QueryRow(ctx, query,
 		health.ServerID,
 		health.Status,
 		health.ResponseTimeMs,
@@ -435,7 +436,7 @@ func (r *ServerRepository) ListForUser(ctx context.Context, filter *domain.Serve
 		}
 	}
 
-	rows, err := r.pool.Query(ctx, query, args...)
+	rows, err := r.db.Query(ctx, query, args...)
 	if err != nil {
 		r.logger.Error().Err(err).Msg("Failed to list servers for user")
 		return nil, fmt.Errorf("failed to list servers for user: %w", err)

@@ -8,30 +8,30 @@ import (
 // Registry holds all Prometheus metrics
 type Registry struct {
 	// HTTP Metrics
-	HTTPRequestsTotal          *prometheus.CounterVec
-	HTTPRequestDuration        *prometheus.HistogramVec
-	HTTPRequestsInFlight       prometheus.Gauge
+	HTTPRequestsTotal    *prometheus.CounterVec
+	HTTPRequestDuration  *prometheus.HistogramVec
+	HTTPRequestsInFlight prometheus.Gauge
 
 	// Gateway Metrics
-	GatewayRequestsTotal       *prometheus.CounterVec
-	GatewayRequestDuration     *prometheus.HistogramVec
-	GatewayRequestsInFlight    *prometheus.GaugeVec
-	GatewayServerHealthStatus  *prometheus.GaugeVec
+	GatewayRequestsTotal      *prometheus.CounterVec
+	GatewayRequestDuration    *prometheus.HistogramVec
+	GatewayRequestsInFlight   *prometheus.GaugeVec
+	GatewayServerHealthStatus *prometheus.GaugeVec
 
 	// Database Metrics (custom collectors will populate these)
-	DBConnectionsOpen          prometheus.Gauge
-	DBConnectionsInUse         prometheus.Gauge
-	DBConnectionsIdle          prometheus.Gauge
-	DBConnectionWaitCount      prometheus.Counter
-	DBConnectionWaitDuration   prometheus.Histogram
+	DBConnectionsOpen        prometheus.Gauge
+	DBConnectionsInUse       prometheus.Gauge
+	DBConnectionsIdle        prometheus.Gauge
+	DBConnectionWaitCount    prometheus.Counter
+	DBConnectionWaitDuration prometheus.Histogram
 
 	// Audit Metrics
-	AuditLogsWrittenTotal      *prometheus.CounterVec
-	AuditLogsWriteDuration     prometheus.Histogram
+	AuditLogsWrittenTotal  *prometheus.CounterVec
+	AuditLogsWriteDuration prometheus.Histogram
 
 	// Registry Metrics
-	RegistryServersTotal       *prometheus.GaugeVec
-	RegistryHealthChecksTotal  *prometheus.CounterVec
+	RegistryServersTotal      *prometheus.GaugeVec
+	RegistryHealthChecksTotal *prometheus.CounterVec
 
 	// Prometheus registry
 	registry *prometheus.Registry

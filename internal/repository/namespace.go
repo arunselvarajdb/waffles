@@ -2,11 +2,11 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/waffles/mcp-gateway/internal/domain"
 	"github.com/waffles/mcp-gateway/pkg/logger"
@@ -14,14 +14,14 @@ import (
 
 // NamespaceRepository handles database operations for namespaces
 type NamespaceRepository struct {
-	pool   *pgxpool.Pool
+	db     DBTX
 	logger logger.Logger
 }
 
 // NewNamespaceRepository creates a new namespace repository
-func NewNamespaceRepository(pool *pgxpool.Pool, log logger.Logger) *NamespaceRepository {
+func NewNamespaceRepository(db DBTX, log logger.Logger) *NamespaceRepository {
 	return &NamespaceRepository{
-		pool:   pool,
+		db:     db,
 		logger: log,
 	}
 }
@@ -35,7 +35,7 @@ func (r *NamespaceRepository) Create(ctx context.Context, req *domain.NamespaceC
 	`
 
 	var ns domain.Namespace
-	err := r.pool.QueryRow(ctx, query, req.Name, req.Description).Scan(
+	err := r.db.QueryRow(ctx, query, req.Name, req.Description).Scan(
 		&ns.ID,
 		&ns.Name,
 		&ns.Description,
@@ -51,17 +51,17 @@ func (r *NamespaceRepository) Create(ctx context.Context, req *domain.NamespaceC
 	return &ns, nil
 }
 
-// Get retrieves a namespace by ID
-func (r *NamespaceRepository) Get(ctx context.Context, id string) (*domain.Namespace, error) {
-	query := `
+// getNamespaceBy is a helper that retrieves a namespace by a given column and value.
+func (r *NamespaceRepository) getNamespaceBy(ctx context.Context, column, value, logField string) (*domain.Namespace, error) {
+	query := fmt.Sprintf(`
 		SELECT n.id, n.name, n.description, n.created_at, n.updated_at,
 			   (SELECT COUNT(*) FROM namespace_members WHERE namespace_id = n.id) as server_count
 		FROM namespaces n
-		WHERE n.id = $1
-	`
+		WHERE n.%s = $1
+	`, column)
 
 	var ns domain.Namespace
-	err := r.pool.QueryRow(ctx, query, id).Scan(
+	err := r.db.QueryRow(ctx, query, value).Scan(
 		&ns.ID,
 		&ns.Name,
 		&ns.Description,
@@ -70,43 +70,25 @@ func (r *NamespaceRepository) Get(ctx context.Context, id string) (*domain.Names
 		&ns.ServerCount,
 	)
 	if err != nil {
-		if err == pgx.ErrNoRows {
+		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, domain.ErrNotFound
 		}
-		r.logger.Error().Err(err).Str("id", id).Msg("Failed to get namespace")
-		return nil, fmt.Errorf("failed to get namespace: %w", err)
+		r.logger.Error().Err(err).Str(logField, value).Msg("Failed to get namespace")
+
+		return nil, fmt.Errorf("failed to get namespace by %s: %w", column, err)
 	}
 
 	return &ns, nil
 }
 
-// GetByName retrieves a namespace by name
+// Get retrieves a namespace by ID.
+func (r *NamespaceRepository) Get(ctx context.Context, id string) (*domain.Namespace, error) {
+	return r.getNamespaceBy(ctx, "id", id, "id")
+}
+
+// GetByName retrieves a namespace by name.
 func (r *NamespaceRepository) GetByName(ctx context.Context, name string) (*domain.Namespace, error) {
-	query := `
-		SELECT n.id, n.name, n.description, n.created_at, n.updated_at,
-			   (SELECT COUNT(*) FROM namespace_members WHERE namespace_id = n.id) as server_count
-		FROM namespaces n
-		WHERE n.name = $1
-	`
-
-	var ns domain.Namespace
-	err := r.pool.QueryRow(ctx, query, name).Scan(
-		&ns.ID,
-		&ns.Name,
-		&ns.Description,
-		&ns.CreatedAt,
-		&ns.UpdatedAt,
-		&ns.ServerCount,
-	)
-	if err != nil {
-		if err == pgx.ErrNoRows {
-			return nil, domain.ErrNotFound
-		}
-		r.logger.Error().Err(err).Str("name", name).Msg("Failed to get namespace by name")
-		return nil, fmt.Errorf("failed to get namespace by name: %w", err)
-	}
-
-	return &ns, nil
+	return r.getNamespaceBy(ctx, "name", name, "name")
 }
 
 // List retrieves all namespaces
@@ -118,7 +100,7 @@ func (r *NamespaceRepository) List(ctx context.Context) ([]*domain.Namespace, er
 		ORDER BY n.name
 	`
 
-	rows, err := r.pool.Query(ctx, query)
+	rows, err := r.db.Query(ctx, query)
 	if err != nil {
 		r.logger.Error().Err(err).Msg("Failed to list namespaces")
 		return nil, fmt.Errorf("failed to list namespaces: %w", err)
@@ -167,7 +149,7 @@ func (r *NamespaceRepository) Update(ctx context.Context, id string, req *domain
 	args = append(args, id)
 
 	var ns domain.Namespace
-	err := r.pool.QueryRow(ctx, query, args...).Scan(
+	err := r.db.QueryRow(ctx, query, args...).Scan(
 		&ns.ID,
 		&ns.Name,
 		&ns.Description,
@@ -175,7 +157,7 @@ func (r *NamespaceRepository) Update(ctx context.Context, id string, req *domain
 		&ns.UpdatedAt,
 	)
 	if err != nil {
-		if err == pgx.ErrNoRows {
+		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, domain.ErrNotFound
 		}
 		r.logger.Error().Err(err).Str("id", id).Msg("Failed to update namespace")
@@ -190,7 +172,7 @@ func (r *NamespaceRepository) Update(ctx context.Context, id string, req *domain
 func (r *NamespaceRepository) Delete(ctx context.Context, id string) error {
 	query := "DELETE FROM namespaces WHERE id = $1"
 
-	result, err := r.pool.Exec(ctx, query, id)
+	result, err := r.db.Exec(ctx, query, id)
 	if err != nil {
 		r.logger.Error().Err(err).Str("id", id).Msg("Failed to delete namespace")
 		return fmt.Errorf("failed to delete namespace: %w", err)
@@ -212,7 +194,7 @@ func (r *NamespaceRepository) AddServerToNamespace(ctx context.Context, serverID
 		ON CONFLICT (server_id, namespace_id) DO NOTHING
 	`
 
-	_, err := r.pool.Exec(ctx, query, serverID, namespaceID)
+	_, err := r.db.Exec(ctx, query, serverID, namespaceID)
 	if err != nil {
 		r.logger.Error().Err(err).
 			Str("server_id", serverID).
@@ -232,7 +214,7 @@ func (r *NamespaceRepository) AddServerToNamespace(ctx context.Context, serverID
 func (r *NamespaceRepository) RemoveServerFromNamespace(ctx context.Context, serverID, namespaceID string) error {
 	query := "DELETE FROM namespace_members WHERE server_id = $1 AND namespace_id = $2"
 
-	result, err := r.pool.Exec(ctx, query, serverID, namespaceID)
+	result, err := r.db.Exec(ctx, query, serverID, namespaceID)
 	if err != nil {
 		r.logger.Error().Err(err).
 			Str("server_id", serverID).
@@ -256,7 +238,7 @@ func (r *NamespaceRepository) RemoveServerFromNamespace(ctx context.Context, ser
 func (r *NamespaceRepository) GetServerNamespaces(ctx context.Context, serverID string) ([]string, error) {
 	query := "SELECT namespace_id FROM namespace_members WHERE server_id = $1"
 
-	rows, err := r.pool.Query(ctx, query, serverID)
+	rows, err := r.db.Query(ctx, query, serverID)
 	if err != nil {
 		r.logger.Error().Err(err).Str("server_id", serverID).Msg("Failed to get server namespaces")
 		return nil, fmt.Errorf("failed to get server namespaces: %w", err)
@@ -286,7 +268,7 @@ func (r *NamespaceRepository) GetNamespaceServers(ctx context.Context, namespace
 		ORDER BY s.name
 	`
 
-	rows, err := r.pool.Query(ctx, query, namespaceID)
+	rows, err := r.db.Query(ctx, query, namespaceID)
 	if err != nil {
 		r.logger.Error().Err(err).Str("namespace_id", namespaceID).Msg("Failed to get namespace servers")
 		return nil, fmt.Errorf("failed to get namespace servers: %w", err)
@@ -318,7 +300,7 @@ func (r *NamespaceRepository) SetRoleNamespaceAccess(ctx context.Context, roleID
 		ON CONFLICT (role_id, namespace_id) DO UPDATE SET access_level = $3
 	`
 
-	_, err := r.pool.Exec(ctx, query, roleID, namespaceID, string(level))
+	_, err := r.db.Exec(ctx, query, roleID, namespaceID, string(level))
 	if err != nil {
 		r.logger.Error().Err(err).
 			Str("role_id", roleID).
@@ -340,7 +322,7 @@ func (r *NamespaceRepository) SetRoleNamespaceAccess(ctx context.Context, roleID
 func (r *NamespaceRepository) RemoveRoleNamespaceAccess(ctx context.Context, roleID, namespaceID string) error {
 	query := "DELETE FROM role_namespace_access WHERE role_id = $1 AND namespace_id = $2"
 
-	result, err := r.pool.Exec(ctx, query, roleID, namespaceID)
+	result, err := r.db.Exec(ctx, query, roleID, namespaceID)
 	if err != nil {
 		r.logger.Error().Err(err).
 			Str("role_id", roleID).
@@ -371,7 +353,7 @@ func (r *NamespaceRepository) GetNamespaceRoleAccess(ctx context.Context, namesp
 		ORDER BY ro.name
 	`
 
-	rows, err := r.pool.Query(ctx, query, namespaceID)
+	rows, err := r.db.Query(ctx, query, namespaceID)
 	if err != nil {
 		r.logger.Error().Err(err).Str("namespace_id", namespaceID).Msg("Failed to get namespace role access")
 		return nil, fmt.Errorf("failed to get namespace role access: %w", err)
@@ -430,7 +412,7 @@ func (r *NamespaceRepository) GetAccessibleServerIDs(ctx context.Context, roles 
 		args = []interface{}{roles, string(minAccessLevel)}
 	}
 
-	rows, err := r.pool.Query(ctx, query, args...)
+	rows, err := r.db.Query(ctx, query, args...)
 	if err != nil {
 		r.logger.Error().Err(err).
 			Any("roles", roles).
@@ -463,9 +445,9 @@ func (r *NamespaceRepository) GetRoleIDByName(ctx context.Context, roleName stri
 	query := "SELECT id FROM roles WHERE name = $1"
 
 	var roleID string
-	err := r.pool.QueryRow(ctx, query, roleName).Scan(&roleID)
+	err := r.db.QueryRow(ctx, query, roleName).Scan(&roleID)
 	if err != nil {
-		if err == pgx.ErrNoRows {
+		if errors.Is(err, pgx.ErrNoRows) {
 			return "", domain.ErrNotFound
 		}
 		return "", fmt.Errorf("failed to get role by name: %w", err)

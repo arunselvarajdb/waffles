@@ -19,12 +19,22 @@ make docker-rebuild   # Rebuild and restart all services
 
 ### Testing
 ```bash
-make test             # Run all tests with race detection and coverage
+# Backend tests
+make test             # Run all backend tests with race detection and coverage
 make test-unit        # Run unit tests only (./internal/...)
 make test-e2e         # Run E2E tests (requires running services)
 go test -v ./internal/config/...  # Run tests for a specific package
 go test -v -run TestName ./...    # Run a single test by name
+
+# Frontend tests (always use make for consistency)
+make test-frontend           # Run frontend unit tests with vitest
+make test-frontend-coverage  # Run frontend tests with coverage report
+
+# All tests
+make test-all         # Run both backend and frontend tests
 ```
+
+**Note:** Always use `make test-frontend` instead of `npm test` directly. This ensures proper Node.js version validation before running tests.
 
 ### Code Quality
 ```bash
@@ -50,9 +60,11 @@ make migrate-create NAME=add_users    # Create new migration files
 
 ### Frontend (Vue.js)
 ```bash
+cd web-app && nvm use         # Switch to correct Node.js version (uses .nvmrc)
 cd web-app && npm run dev     # Start Vite dev server
-cd web-app && npm run build   # Build production bundle
-make test-frontend            # Run frontend tests
+make build-frontend           # Build production bundle (validates Node.js version)
+make test-frontend            # Run frontend tests (validates Node.js version)
+make test-frontend-coverage   # Run frontend tests with coverage
 ```
 
 ### OAuth/SSO with Keycloak (Optional)

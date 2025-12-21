@@ -2,11 +2,11 @@ package server
 
 import (
 	"context"
-	"embed"
 	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+
 	"github.com/waffles/mcp-gateway/internal/config"
 	"github.com/waffles/mcp-gateway/internal/database"
 	"github.com/waffles/mcp-gateway/internal/metrics"
@@ -22,11 +22,10 @@ type Server struct {
 	logger        logger.Logger
 	metrics       *metrics.Registry
 	metricsServer *metrics.Server
-	webAppFS      embed.FS
 }
 
 // New creates a new HTTP server instance
-func New(cfg *config.Config, db *database.DB, log logger.Logger, metricsReg *metrics.Registry, metricsSrv *metrics.Server, webAppFS embed.FS) *Server {
+func New(cfg *config.Config, db *database.DB, log logger.Logger, metricsReg *metrics.Registry, metricsSrv *metrics.Server) *Server {
 	// Set Gin mode based on environment
 	if cfg.Server.Environment == "production" {
 		gin.SetMode(gin.ReleaseMode)
@@ -54,7 +53,6 @@ func New(cfg *config.Config, db *database.DB, log logger.Logger, metricsReg *met
 		logger:        log,
 		metrics:       metricsReg,
 		metricsServer: metricsSrv,
-		webAppFS:      webAppFS,
 	}
 }
 

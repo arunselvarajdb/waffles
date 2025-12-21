@@ -7,17 +7,17 @@ import (
 
 // Common MCP errors
 var (
-	ErrConnectionFailed    = errors.New("failed to connect to MCP server")
-	ErrInitializeFailed    = errors.New("failed to initialize MCP connection")
-	ErrToolNotFound        = errors.New("tool not found")
-	ErrToolCallFailed      = errors.New("tool call failed")
-	ErrResourceNotFound    = errors.New("resource not found")
-	ErrResourceReadFailed  = errors.New("failed to read resource")
-	ErrPromptNotFound      = errors.New("prompt not found")
-	ErrPromptGetFailed     = errors.New("failed to get prompt")
-	ErrInvalidResponse     = errors.New("invalid response from MCP server")
-	ErrUnsupportedVersion  = errors.New("unsupported protocol version")
-	ErrMissingCapability   = errors.New("server does not support required capability")
+	ErrConnectionFailed   = errors.New("failed to connect to MCP server")
+	ErrInitializeFailed   = errors.New("failed to initialize MCP connection")
+	ErrToolNotFound       = errors.New("tool not found")
+	ErrToolCallFailed     = errors.New("tool call failed")
+	ErrResourceNotFound   = errors.New("resource not found")
+	ErrResourceReadFailed = errors.New("failed to read resource")
+	ErrPromptNotFound     = errors.New("prompt not found")
+	ErrPromptGetFailed    = errors.New("failed to get prompt")
+	ErrInvalidResponse    = errors.New("invalid response from MCP server")
+	ErrUnsupportedVersion = errors.New("unsupported protocol version")
+	ErrMissingCapability  = errors.New("server does not support required capability")
 )
 
 // MCPError represents an error from an MCP server

@@ -185,3 +185,212 @@ func TestContext_BothIDs(t *testing.T) {
 	assert.Equal(t, "req-123", GetRequestID(ctx))
 	assert.Equal(t, "user-456", GetUserID(ctx))
 }
+
+func TestLogger_AllEventMethods(t *testing.T) {
+	var buf bytes.Buffer
+	cfg := Config{
+		Level:  DebugLevel,
+		Format: "json",
+		Output: &buf,
+	}
+	log := NewZerolog(cfg)
+
+	// Test Uint method
+	log.Info().Uint("count", 100).Msg("uint test")
+
+	// Test Err method
+	log.Error().Err(assert.AnError).Msg("error test")
+
+	// Test Dur method with time.Duration
+	log.Info().Dur("duration", 5*1e9).Msg("duration test") // 5 seconds in nanoseconds
+
+	// Test Any method
+	log.Info().Any("data", map[string]int{"key": 42}).Msg("any test")
+
+	// Test Msgf method
+	log.Info().Msgf("formatted: %s %d", "test", 123)
+
+	// Test Send method
+	log.Info().Str("key", "value").Send()
+
+	output := buf.String()
+	assert.Contains(t, output, "uint test")
+	assert.Contains(t, output, "error test")
+	assert.Contains(t, output, "duration test")
+	assert.Contains(t, output, "any test")
+	assert.Contains(t, output, "formatted: test 123")
+	assert.Contains(t, output, "key")
+}
+
+func TestLogger_WithContextMethod(t *testing.T) {
+	var buf bytes.Buffer
+	cfg := Config{
+		Level:  InfoLevel,
+		Format: "json",
+		Output: &buf,
+	}
+	log := NewZerolog(cfg)
+
+	// Test With() to add persistent fields
+	logWithFields := log.With().Str("service", "test-service").Int("version", 1).Logger()
+
+	logWithFields.Info().Msg("message with persistent fields")
+
+	output := buf.String()
+	assert.Contains(t, output, "test-service")
+	assert.Contains(t, output, "message with persistent fields")
+}
+
+func TestZeroContext_AllMethods(t *testing.T) {
+	var buf bytes.Buffer
+	cfg := Config{
+		Level:  InfoLevel,
+		Format: "json",
+		Output: &buf,
+	}
+	log := NewZerolog(cfg)
+
+	// Test all Context methods
+	ctxLogger := log.With().
+		Str("string_ctx", "value").
+		Int("int_ctx", 42).
+		Bool("bool_ctx", true).
+		Err(assert.AnError).
+		Logger()
+
+	ctxLogger.Info().Msg("context logger test")
+
+	output := buf.String()
+	assert.Contains(t, output, "string_ctx")
+	assert.Contains(t, output, "context logger test")
+}
+
+func TestParseLevel(t *testing.T) {
+	// This tests the parseLevel function indirectly through NewZerolog
+	tests := []struct {
+		name   string
+		level  Level
+		format string
+	}{
+		{"debug level", DebugLevel, "json"},
+		{"info level", InfoLevel, "json"},
+		{"warn level", WarnLevel, "json"},
+		{"error level", ErrorLevel, "json"},
+		{"fatal level", FatalLevel, "json"},
+		{"unknown level defaults to info", Level("unknown"), "json"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var buf bytes.Buffer
+			cfg := Config{
+				Level:  tt.level,
+				Format: tt.format,
+				Output: &buf,
+			}
+			log := NewZerolog(cfg)
+			assert.NotNil(t, log)
+		})
+	}
+}
+
+func TestLogger_ConsoleFormat(t *testing.T) {
+	var buf bytes.Buffer
+	cfg := Config{
+		Level:  InfoLevel,
+		Format: "console",
+		Output: &buf,
+	}
+	log := NewZerolog(cfg)
+
+	log.Info().Str("key", "value").Msg("console format test")
+
+	output := buf.String()
+	assert.Contains(t, output, "console format test")
+}
+
+func TestLogger_DefaultOutput(t *testing.T) {
+	// Test that nil output defaults to stdout
+	cfg := Config{
+		Level:  InfoLevel,
+		Format: "json",
+		Output: nil, // Should default to os.Stdout
+	}
+	log := NewZerolog(cfg)
+	assert.NotNil(t, log)
+}
+
+func TestLogger_WithContext_EmptyContext(t *testing.T) {
+	var buf bytes.Buffer
+	cfg := Config{
+		Level:  InfoLevel,
+		Format: "json",
+		Output: &buf,
+	}
+	log := NewZerolog(cfg)
+
+	// Test with empty context (no request_id or user_id)
+	ctx := context.Background()
+	ctxLogger := log.WithContext(ctx)
+
+	ctxLogger.Info().Msg("empty context test")
+
+	// Parse JSON to verify no request_id or user_id
+	var logEntry map[string]interface{}
+	lines := bytes.Split(buf.Bytes(), []byte("\n"))
+	err := json.Unmarshal(lines[0], &logEntry)
+	require.NoError(t, err)
+
+	_, hasRequestID := logEntry["request_id"]
+	_, hasUserID := logEntry["user_id"]
+	assert.False(t, hasRequestID)
+	assert.False(t, hasUserID)
+}
+
+func TestLogger_WithContext_OnlyRequestID(t *testing.T) {
+	var buf bytes.Buffer
+	cfg := Config{
+		Level:  InfoLevel,
+		Format: "json",
+		Output: &buf,
+	}
+	log := NewZerolog(cfg)
+
+	ctx := WithRequestID(context.Background(), "req-only")
+	ctxLogger := log.WithContext(ctx)
+
+	ctxLogger.Info().Msg("request id only test")
+
+	var logEntry map[string]interface{}
+	lines := bytes.Split(buf.Bytes(), []byte("\n"))
+	err := json.Unmarshal(lines[0], &logEntry)
+	require.NoError(t, err)
+
+	assert.Equal(t, "req-only", logEntry["request_id"])
+	_, hasUserID := logEntry["user_id"]
+	assert.False(t, hasUserID)
+}
+
+func TestLogger_WithContext_OnlyUserID(t *testing.T) {
+	var buf bytes.Buffer
+	cfg := Config{
+		Level:  InfoLevel,
+		Format: "json",
+		Output: &buf,
+	}
+	log := NewZerolog(cfg)
+
+	ctx := WithUserID(context.Background(), "user-only")
+	ctxLogger := log.WithContext(ctx)
+
+	ctxLogger.Info().Msg("user id only test")
+
+	var logEntry map[string]interface{}
+	lines := bytes.Split(buf.Bytes(), []byte("\n"))
+	err := json.Unmarshal(lines[0], &logEntry)
+	require.NoError(t, err)
+
+	assert.Equal(t, "user-only", logEntry["user_id"])
+	_, hasRequestID := logEntry["request_id"]
+	assert.False(t, hasRequestID)
+}

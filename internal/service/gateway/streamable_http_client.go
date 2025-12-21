@@ -28,7 +28,7 @@ const (
 	HeaderContentType        = "Content-Type"
 
 	// Content types
-	ContentTypeJSON       = "application/json"
+	ContentTypeJSON        = "application/json"
 	ContentTypeEventStream = "text/event-stream"
 )
 

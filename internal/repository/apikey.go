@@ -5,11 +5,13 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+
 	"github.com/waffles/mcp-gateway/internal/domain"
 	"github.com/waffles/mcp-gateway/pkg/logger"
 )
@@ -19,7 +21,7 @@ type APIKey struct {
 	ID         string     `json:"id"`
 	UserID     string     `json:"user_id"`
 	Name       string     `json:"name"`
-	KeyHash    string     `json:"-"` // Never expose hash
+	KeyHash    string     `json:"-"`          // Never expose hash
 	KeyPrefix  string     `json:"key_prefix"` // First 8 chars for identification
 	ExpiresAt  *time.Time `json:"expires_at,omitempty"`
 	LastUsedAt *time.Time `json:"last_used_at,omitempty"`
@@ -125,7 +127,7 @@ func (r *APIKeyRepository) GetByHash(ctx context.Context, keyHash string) (*APIK
 		&apiKey.CreatedAt,
 	)
 
-	if err == pgx.ErrNoRows {
+	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, domain.ErrAPIKeyNotFound
 	}
 	if err != nil {
@@ -242,7 +244,7 @@ func (r *APIKeyRepository) GetByID(ctx context.Context, keyID string) (*APIKey, 
 		&apiKey.CreatedAt,
 	)
 
-	if err == pgx.ErrNoRows {
+	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, domain.ErrAPIKeyNotFound
 	}
 	if err != nil {

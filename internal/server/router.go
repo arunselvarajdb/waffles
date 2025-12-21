@@ -1,9 +1,8 @@
 package server
 
 import (
-	"io"
-	"io/fs"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -11,6 +10,7 @@ import (
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-contrib/sessions/cookie"
 	"github.com/gin-gonic/gin"
+
 	"github.com/waffles/mcp-gateway/internal/handler"
 	"github.com/waffles/mcp-gateway/internal/handler/middleware"
 	"github.com/waffles/mcp-gateway/internal/repository"
@@ -194,7 +194,7 @@ func (s *Server) SetupRoutes() {
 				servers.GET("", registryHandler.ListServers)
 				servers.POST("", registryHandler.CreateServer)
 				servers.POST("/test-connection", registryHandler.TestConnection) // Test connection without saving
-				servers.POST("/call-tool", registryHandler.CallTool)           // Call tool for inspection
+				servers.POST("/call-tool", registryHandler.CallTool)             // Call tool for inspection
 				servers.GET("/:id", registryHandler.GetServer)
 				servers.PUT("/:id", registryHandler.UpdateServer)
 				servers.DELETE("/:id", registryHandler.DeleteServer)
@@ -267,7 +267,8 @@ func (s *Server) setupSessionStore() sessions.Store {
 	// Get session secret from config or use a default for development
 	secret := s.config.Auth.SessionSecret
 	if secret == "" {
-		secret = "dev-session-secret-change-in-production-32b"
+		// This is a development-only fallback with a clear warning
+		secret = "dev-session-secret-change-in-production-32b" // #nosec G101 -- intentional dev default
 		s.logger.Warn().Msg("Using default session secret - please set auth.session_secret in production")
 	}
 
@@ -298,7 +299,7 @@ func (s *Server) setupSessionStore() sessions.Store {
 	store.Options(sessions.Options{
 		Path:     "/",
 		MaxAge:   maxAge,
-		HttpOnly: true,  // Prevent JavaScript access (XSS protection)
+		HttpOnly: true,   // Prevent JavaScript access (XSS protection)
 		Secure:   secure, // HTTPS only in production
 		SameSite: sameSite,
 		Domain:   s.config.Auth.CookieDomain,
@@ -320,17 +321,14 @@ func (s *Server) corsWithCredentials() gin.HandlerFunc {
 
 		// In development, allow the frontend dev server
 		allowedOrigins := []string{
-			"http://localhost:5173",  // Vite dev server
-			"http://localhost:3000",  // Alternative dev port
+			"http://localhost:5173", // Vite dev server
+			"http://localhost:3000", // Alternative dev port
 			"http://127.0.0.1:5173",
 			"http://127.0.0.1:3000",
 		}
 
-		// In production, you'd set this from config
-		if s.config.Server.Environment == "production" {
-			// Add production frontend URL
-			// allowedOrigins = append(allowedOrigins, "https://your-frontend.com")
-		}
+		// In production, add your frontend URL to allowedOrigins:
+		// allowedOrigins = append(allowedOrigins, "https://your-frontend.com")
 
 		// Check if origin is allowed
 		allowed := false
@@ -361,19 +359,37 @@ func (s *Server) corsWithCredentials() gin.HandlerFunc {
 	}
 }
 
-// setupStaticFileServing configures serving of Vue.js static files
+// setupStaticFileServing configures serving of Vue.js static files from filesystem.
 func (s *Server) setupStaticFileServing() {
-	// Extract dist subfolder from embedded FS
-	distFS, err := fs.Sub(s.webAppFS, "dist")
-	if err != nil {
-		s.logger.Warn().Err(err).Msg("Failed to load web-app dist folder, static files will not be served")
+	staticDir := s.config.Server.StaticDir
+	if staticDir == "" {
+		s.logger.Info().Msg("No static_dir configured, UI will not be served")
+		s.setupNoRouteHandler("")
+
 		return
 	}
 
-	// Serve static assets (JS, CSS, images, etc.)
-	s.router.StaticFS("/assets", http.FS(distFS))
+	// Check if the directory exists
+	if _, err := os.Stat(staticDir); os.IsNotExist(err) {
+		s.logger.Warn().Str("path", staticDir).Msg("Static files directory not found, UI will not be served")
+		s.setupNoRouteHandler("")
+		return
+	}
 
-	// SPA fallback - serve index.html for all non-API routes
+	// Serve static assets (JS, CSS, images, etc.) from assets subdirectory
+	assetsDir := filepath.Join(staticDir, "assets")
+	if _, err := os.Stat(assetsDir); err == nil {
+		s.router.Static("/assets", assetsDir)
+	}
+
+	// Setup SPA fallback with static directory
+	s.setupNoRouteHandler(staticDir)
+
+	s.logger.Info().Str("path", staticDir).Msg("Vue.js application configured to be served from filesystem")
+}
+
+// setupNoRouteHandler configures the NoRoute handler for SPA routing.
+func (s *Server) setupNoRouteHandler(staticDir string) {
 	s.router.NoRoute(func(c *gin.Context) {
 		path := c.Request.URL.Path
 
@@ -395,32 +411,34 @@ func (s *Server) setupStaticFileServing() {
 			return
 		}
 
+		// If no static directory, return 404
+		if staticDir == "" {
+			c.JSON(http.StatusNotFound, gin.H{
+				"error": "Not found",
+				"path":  path,
+			})
+
+			return
+		}
+
 		// Check if requesting a static file
 		if filepath.Ext(path) != "" && !strings.HasSuffix(path, ".html") {
-			// Try to serve the file from dist
-			file, err := distFS.Open(strings.TrimPrefix(path, "/"))
-			if err == nil {
-				defer file.Close()
-				stat, _ := file.Stat()
-				http.ServeContent(c.Writer, c.Request, path, stat.ModTime(), file.(io.ReadSeeker))
+			// Try to serve the file from static directory
+			filePath := filepath.Join(staticDir, strings.TrimPrefix(path, "/"))
+			if _, err := os.Stat(filePath); err == nil {
+				c.File(filePath)
 				return
 			}
 		}
 
 		// Serve index.html for all other routes (SPA routing)
-		indexFile, err := distFS.Open("index.html")
-		if err != nil {
+		indexPath := filepath.Join(staticDir, "index.html")
+		if _, err := os.Stat(indexPath); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"error": "Failed to load application",
 			})
 			return
 		}
-		defer indexFile.Close()
-
-		stat, _ := indexFile.Stat()
-		c.Header("Content-Type", "text/html; charset=utf-8")
-		http.ServeContent(c.Writer, c.Request, "index.html", stat.ModTime(), indexFile.(io.ReadSeeker))
+		c.File(indexPath)
 	})
-
-	s.logger.Info().Msg("Vue.js application configured to be served from embedded files")
 }

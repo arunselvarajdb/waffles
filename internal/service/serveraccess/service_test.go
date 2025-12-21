@@ -7,45 +7,23 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	"github.com/waffles/mcp-gateway/internal/domain"
+	"github.com/waffles/mcp-gateway/pkg/logger"
 )
 
-// mockGroupRepository is a mock implementation of the group repository for testing
-type mockGroupRepository struct {
-	accessibleServerIDs []string
+// mockNamespaceRepository is a mock implementation of the namespace repository for testing.
+type mockNamespaceRepository struct {
 	err                 error
+	accessibleServerIDs []string
 }
 
-func (m *mockGroupRepository) GetAccessibleServerIDs(ctx context.Context, roles []string, level domain.AccessLevel) ([]string, error) {
+func (m *mockNamespaceRepository) GetAccessibleServerIDs(ctx context.Context, roles []string, level domain.AccessLevel) ([]string, error) {
 	if m.err != nil {
 		return nil, m.err
 	}
 	return m.accessibleServerIDs, nil
 }
-
-// mockLogger is a minimal logger for testing
-type mockLogger struct{}
-
-func (m *mockLogger) Debug() logEvent { return &mockLogEvent{} }
-func (m *mockLogger) Info() logEvent  { return &mockLogEvent{} }
-func (m *mockLogger) Warn() logEvent  { return &mockLogEvent{} }
-func (m *mockLogger) Error() logEvent { return &mockLogEvent{} }
-
-type logEvent interface {
-	Msg(string)
-	Str(string, string) logEvent
-	Any(string, interface{}) logEvent
-	Int(string, int) logEvent
-	Err(error) logEvent
-}
-
-type mockLogEvent struct{}
-
-func (m *mockLogEvent) Msg(string)                        {}
-func (m *mockLogEvent) Str(string, string) logEvent       { return m }
-func (m *mockLogEvent) Any(string, interface{}) logEvent  { return m }
-func (m *mockLogEvent) Int(string, int) logEvent          { return m }
-func (m *mockLogEvent) Err(error) logEvent                { return m }
 
 func TestIsAdmin(t *testing.T) {
 	tests := []struct {
@@ -144,161 +122,178 @@ func TestFilterServerIDs(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockRepo := &mockGroupRepository{
+			mockRepo := &mockNamespaceRepository{
 				accessibleServerIDs: tt.accessibleServerIDs,
 				err:                 tt.repoError,
 			}
 
-			// Create service with mock - we can't use NewService directly
-			// because it expects *repository.ServerGroupRepository
-			// So we test the logic separately
+			svc := NewService(mockRepo, logger.NewNopLogger())
+			ctx := context.Background()
 
-			s := &Service{}
+			result, err := svc.FilterServerIDs(ctx, tt.roles, tt.inputServerIDs, domain.AccessLevelView)
 
-			// Test IsAdmin logic
-			if s.IsAdmin(tt.roles) {
-				// Admin should return original list
-				assert.Equal(t, tt.inputServerIDs, tt.inputServerIDs)
+			if tt.expectError {
+				assert.Error(t, err)
 				return
 			}
 
-			// Simulate FilterServerIDs logic for non-admin
-			if tt.repoError != nil {
-				return // Error case - service would return error
-			}
-
-			// Create accessible set
-			accessibleSet := make(map[string]bool)
-			for _, id := range mockRepo.accessibleServerIDs {
-				accessibleSet[id] = true
-			}
-
-			// Filter
-			var filtered []string
-			for _, id := range tt.inputServerIDs {
-				if accessibleSet[id] {
-					filtered = append(filtered, id)
-				}
-			}
-
-			assert.Equal(t, tt.expected, filtered)
+			require.NoError(t, err)
+			assert.Equal(t, tt.expected, result)
 		})
 	}
 }
 
-func TestCanAccessServer_AdminBypass(t *testing.T) {
-	s := &Service{}
+func TestCanAccessServer(t *testing.T) {
+	tests := []struct {
+		repoError           error
+		name                string
+		serverID            string
+		roles               []string
+		accessibleServerIDs []string
+		expected            bool
+		expectError         bool
+	}{
+		{
+			name:                "admin always has access",
+			roles:               []string{"admin"},
+			serverID:            "server-123",
+			accessibleServerIDs: []string{},
+			expected:            true,
+		},
+		{
+			name:                "admin among other roles",
+			roles:               []string{"viewer", "admin"},
+			serverID:            "server-123",
+			accessibleServerIDs: []string{},
+			expected:            true,
+		},
+		{
+			name:                "non-admin with access",
+			roles:               []string{"operator"},
+			serverID:            "server-1",
+			accessibleServerIDs: []string{"server-1", "server-2"},
+			expected:            true,
+		},
+		{
+			name:                "non-admin without access",
+			roles:               []string{"viewer"},
+			serverID:            "server-3",
+			accessibleServerIDs: []string{"server-1", "server-2"},
+			expected:            false,
+		},
+		{
+			name:        "repository error",
+			roles:       []string{"operator"},
+			serverID:    "server-1",
+			repoError:   errors.New("database error"),
+			expectError: true,
+		},
+	}
 
-	// Admin should always have access
-	assert.True(t, s.IsAdmin([]string{"admin"}))
-	assert.True(t, s.IsAdmin([]string{"viewer", "admin"}))
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockRepo := &mockNamespaceRepository{
+				accessibleServerIDs: tt.accessibleServerIDs,
+				err:                 tt.repoError,
+			}
 
-	// Non-admin check
-	assert.False(t, s.IsAdmin([]string{"viewer"}))
-	assert.False(t, s.IsAdmin([]string{"operator", "viewer"}))
+			svc := NewService(mockRepo, logger.NewNopLogger())
+			ctx := context.Background()
+
+			result, err := svc.CanAccessServer(ctx, tt.roles, tt.serverID, domain.AccessLevelView)
+
+			if tt.expectError {
+				assert.Error(t, err)
+
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestGetAccessibleServerIDs(t *testing.T) {
+	tests := []struct {
+		name                string
+		roles               []string
+		accessibleServerIDs []string
+		repoError           error
+		expected            []string
+		expectError         bool
+	}{
+		{
+			name:     "admin returns nil for all access",
+			roles:    []string{"admin"},
+			expected: nil,
+		},
+		{
+			name:                "non-admin returns server IDs",
+			roles:               []string{"operator"},
+			accessibleServerIDs: []string{"server-1", "server-2"},
+			expected:            []string{"server-1", "server-2"},
+		},
+		{
+			name:                "empty accessible list",
+			roles:               []string{"viewer"},
+			accessibleServerIDs: []string{},
+			expected:            []string{},
+		},
+		{
+			name:        "repository error",
+			roles:       []string{"operator"},
+			repoError:   errors.New("database error"),
+			expectError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockRepo := &mockNamespaceRepository{
+				accessibleServerIDs: tt.accessibleServerIDs,
+				err:                 tt.repoError,
+			}
+
+			svc := NewService(mockRepo, logger.NewNopLogger())
+			ctx := context.Background()
+
+			result, err := svc.GetAccessibleServerIDs(ctx, tt.roles, domain.AccessLevelView)
+
+			if tt.expectError {
+				assert.Error(t, err)
+
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestNewService(t *testing.T) {
+	mockRepo := &mockNamespaceRepository{}
+	log := logger.NewNopLogger()
+
+	svc := NewService(mockRepo, log)
+
+	require.NotNil(t, svc)
+	assert.NotNil(t, svc.namespaceRepo)
+	assert.NotNil(t, svc.logger)
+}
+
+func TestNewService_NilRepo(t *testing.T) {
+	log := logger.NewNopLogger()
+
+	svc := NewService(nil, log)
+
+	require.NotNil(t, svc)
+	assert.Nil(t, svc.namespaceRepo)
 }
 
 func TestAccessLevelConstants(t *testing.T) {
 	// Verify access level constants are defined correctly
 	assert.Equal(t, domain.AccessLevel("view"), domain.AccessLevelView)
 	assert.Equal(t, domain.AccessLevel("execute"), domain.AccessLevelExecute)
-}
-
-func TestFilterServerIDs_Logic(t *testing.T) {
-	// Test the core filtering logic
-	tests := []struct {
-		name        string
-		serverIDs   []string
-		accessibles []string
-		expected    []string
-	}{
-		{
-			name:        "partial overlap",
-			serverIDs:   []string{"a", "b", "c", "d"},
-			accessibles: []string{"b", "d"},
-			expected:    []string{"b", "d"},
-		},
-		{
-			name:        "no overlap",
-			serverIDs:   []string{"a", "b"},
-			accessibles: []string{"c", "d"},
-			expected:    []string{},
-		},
-		{
-			name:        "complete overlap",
-			serverIDs:   []string{"a", "b"},
-			accessibles: []string{"a", "b", "c"},
-			expected:    []string{"a", "b"},
-		},
-		{
-			name:        "empty input",
-			serverIDs:   []string{},
-			accessibles: []string{"a", "b"},
-			expected:    []string{},
-		},
-		{
-			name:        "empty accessibles",
-			serverIDs:   []string{"a", "b"},
-			accessibles: []string{},
-			expected:    []string{},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Simulate filter logic
-			accessibleSet := make(map[string]bool)
-			for _, id := range tt.accessibles {
-				accessibleSet[id] = true
-			}
-
-			var filtered []string
-			for _, id := range tt.serverIDs {
-				if accessibleSet[id] {
-					filtered = append(filtered, id)
-				}
-			}
-
-			if len(tt.expected) == 0 {
-				assert.Empty(t, filtered)
-			} else {
-				assert.Equal(t, tt.expected, filtered)
-			}
-		})
-	}
-}
-
-func TestService_NilHandling(t *testing.T) {
-	s := &Service{}
-
-	// Test with nil roles
-	result := s.IsAdmin(nil)
-	assert.False(t, result)
-
-	// Test with empty roles
-	result = s.IsAdmin([]string{})
-	assert.False(t, result)
-}
-
-// Integration-style tests that verify the service methods work correctly
-// These test the actual service methods with proper mocking
-
-func TestGetAccessibleServerIDs_AdminReturnsNil(t *testing.T) {
-	// For admin users, GetAccessibleServerIDs should return nil (meaning all servers)
-	// This is tested by verifying IsAdmin returns true for admin role
-
-	s := &Service{}
-
-	// When admin is detected, the service should return nil early
-	// Testing the IsAdmin check that happens first
-	require.True(t, s.IsAdmin([]string{"admin"}))
-	require.True(t, s.IsAdmin([]string{"operator", "admin"}))
-}
-
-func TestGetAccessibleServerIDs_EmptyRoles(t *testing.T) {
-	// Empty roles should not be admin and would rely on repository
-	s := &Service{}
-
-	require.False(t, s.IsAdmin([]string{}))
-	require.False(t, s.IsAdmin(nil))
 }

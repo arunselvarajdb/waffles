@@ -23,6 +23,7 @@ type ServerConfig struct {
 	WriteTimeout    time.Duration `mapstructure:"write_timeout"`
 	ShutdownTimeout time.Duration `mapstructure:"shutdown_timeout"`
 	Environment     string        `mapstructure:"environment"` // development, staging, production
+	StaticDir       string        `mapstructure:"static_dir"`  // Path to frontend static files (empty = no UI)
 }
 
 // DatabaseConfig holds database connection configuration

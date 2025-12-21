@@ -7,6 +7,7 @@ import (
 
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
+
 	"github.com/waffles/mcp-gateway/internal/repository"
 	"github.com/waffles/mcp-gateway/pkg/logger"
 )
@@ -174,7 +175,7 @@ func CombinedAuth(cfg *AuthConfig) gin.HandlerFunc {
 					// Update last used (async)
 					go func() {
 						ctx := context.Background()
-						cfg.APIKeyRepo.UpdateLastUsed(ctx, key.ID)
+						_ = cfg.APIKeyRepo.UpdateLastUsed(ctx, key.ID) // #nosec G104 -- async update error is non-critical
 					}()
 
 					c.Set(ContextKeyUserID, user.ID)

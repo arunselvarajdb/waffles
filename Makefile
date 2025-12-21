@@ -1,10 +1,12 @@
-.PHONY: help install-tools dev-up dev-down migrate-up migrate-down migrate-create seed run test test-unit test-integration test-e2e test-e2e-ui test-e2e-headed test-frontend test-all lint fmt generate build build-linux build-all build-frontend docker-build docker-push clean clean-all pre-commit security-scan
+.PHONY: help install-tools dev-up dev-down migrate-up migrate-down migrate-create seed run test test-unit test-integration test-e2e test-e2e-ui test-e2e-headed check-node test-frontend test-frontend-coverage test-all lint fmt generate build build-linux build-all build-frontend docker-build docker-push clean clean-all pre-commit security-scan
 
 # Variables
 APP_NAME=mcp-gateway
 DOCKER_IMAGE=ghcr.io/waffles/$(APP_NAME)
 DOCKER_TAG?=latest
 GO_VERSION=1.22
+NODE_MIN_VERSION=18
+NPM_MIN_VERSION=9
 
 # Detect local OS and architecture
 GOOS?=$(shell go env GOOS)
@@ -265,21 +267,44 @@ docker-push:
 	docker push $(DOCKER_IMAGE):$(DOCKER_TAG)
 	@echo "$(COLOR_GREEN)✓ Docker image pushed$(COLOR_RESET)"
 
-## test-frontend: Run frontend tests
-test-frontend:
+## check-node: Validate Node.js and npm versions
+check-node:
+	@echo "$(COLOR_BLUE)Checking Node.js and npm versions...$(COLOR_RESET)"
+	@command -v node > /dev/null || (echo "Error: Node.js is not installed. Please install Node.js >= $(NODE_MIN_VERSION)" && exit 1)
+	@command -v npm > /dev/null || (echo "Error: npm is not installed. Please install npm >= $(NPM_MIN_VERSION)" && exit 1)
+	@NODE_VERSION=$$(node -v | sed 's/v//' | cut -d. -f1); \
+	if [ "$$NODE_VERSION" -lt "$(NODE_MIN_VERSION)" ]; then \
+		echo "Error: Node.js version $$NODE_VERSION is too old. Required: >= $(NODE_MIN_VERSION)"; \
+		exit 1; \
+	fi
+	@NPM_VERSION=$$(npm -v | cut -d. -f1); \
+	if [ "$$NPM_VERSION" -lt "$(NPM_MIN_VERSION)" ]; then \
+		echo "Error: npm version $$NPM_VERSION is too old. Required: >= $(NPM_MIN_VERSION)"; \
+		exit 1; \
+	fi
+	@echo "$(COLOR_GREEN)✓ Node.js $$(node -v) and npm $$(npm -v) OK$(COLOR_RESET)"
+
+## test-frontend: Run frontend unit tests with vitest
+test-frontend: check-node
 	@echo "$(COLOR_BLUE)Running frontend tests...$(COLOR_RESET)"
-	@cd web-app && npm test
+	@cd web-app && npm install && npm test
 	@echo "$(COLOR_GREEN)✓ Frontend tests passed$(COLOR_RESET)"
+
+## test-frontend-coverage: Run frontend tests with coverage report
+test-frontend-coverage: check-node
+	@echo "$(COLOR_BLUE)Running frontend tests with coverage...$(COLOR_RESET)"
+	@cd web-app && npm install && npm run test:coverage
+	@echo "$(COLOR_GREEN)✓ Frontend tests passed with coverage$(COLOR_RESET)"
 
 ## test-all: Run all tests (backend + frontend)
 test-all: test test-frontend
 	@echo "$(COLOR_GREEN)✓ All tests passed (backend + frontend)$(COLOR_RESET)"
 
 ## build-frontend: Build Vue.js frontend
-build-frontend:
+build-frontend: check-node
 	@echo "$(COLOR_BLUE)Building Vue.js frontend...$(COLOR_RESET)"
-	@cd web-app && npm run build
-	@echo "$(COLOR_GREEN)✓ Frontend built: web-app/dist/$(COLOR_RESET)"
+	@cd web-app && npm install && npm run build
+	@echo "$(COLOR_GREEN)✓ Frontend built in web-app/dist/$(COLOR_RESET)"
 
 ## clean: Remove build artifacts
 clean:
