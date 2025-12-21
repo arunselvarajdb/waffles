@@ -318,10 +318,7 @@ func (h *GatewayHandler) proxyWithToolFiltering(c *gin.Context, serverID string,
 					},
 				}
 				respBytes, _ := json.Marshal(errorResp)
-				c.Writer.Write([]byte("event: message\n"))
-				c.Writer.Write([]byte("data: "))
-				c.Writer.Write(respBytes)
-				c.Writer.Write([]byte("\n\n"))
+				writeSSEEvent(c.Writer, respBytes)
 				return
 			}
 		}
@@ -423,10 +420,7 @@ func (h *GatewayHandler) proxyToolsListWithFiltering(c *gin.Context, serverID st
 		h.logger.Warn().Err(err).Str("server_id", serverID).Msg("Failed to parse tools/list result, returning as-is")
 		// Can't parse, return the original response
 		c.Header("Content-Type", "text/event-stream")
-		c.Writer.Write([]byte("event: message\n"))
-		c.Writer.Write([]byte("data: "))
-		c.Writer.Write(bodyBytes)
-		c.Writer.Write([]byte("\n\n"))
+		writeSSEEvent(c.Writer, bodyBytes)
 		return
 	}
 
@@ -456,10 +450,7 @@ func (h *GatewayHandler) proxyToolsListWithFiltering(c *gin.Context, serverID st
 	respBytes, _ := json.Marshal(finalResp)
 
 	c.Header("Content-Type", "text/event-stream")
-	c.Writer.Write([]byte("event: message\n"))
-	c.Writer.Write([]byte("data: "))
-	c.Writer.Write(respBytes)
-	c.Writer.Write([]byte("\n\n"))
+	writeSSEEvent(c.Writer, respBytes)
 }
 
 // parseSSEResponse parses an SSE-formatted response to extract the JSON-RPC response
@@ -494,6 +485,16 @@ func (h *GatewayHandler) parseSSEResponse(body []byte) (MCPResponse, error) {
 	return mcpResp, nil
 }
 
+// writeSSEEvent writes an SSE event to the response writer.
+// Write errors are intentionally ignored for SSE streams - once a client disconnects,
+// writes will fail and there's no recovery action we can take.
+func writeSSEEvent(w io.Writer, data []byte) {
+	_, _ = w.Write([]byte("event: message\n")) // #nosec G104 -- SSE write errors intentionally ignored
+	_, _ = w.Write([]byte("data: "))           // #nosec G104 -- SSE write errors intentionally ignored
+	_, _ = w.Write(data)                       // #nosec G104 -- SSE write errors intentionally ignored
+	_, _ = w.Write([]byte("\n\n"))             // #nosec G104 -- SSE write errors intentionally ignored
+}
+
 // sendMCPError sends a JSON-RPC error response in SSE format
 func (h *GatewayHandler) sendMCPError(c *gin.Context, id interface{}, code int, message string) {
 	c.Header("Content-Type", "text/event-stream")
@@ -506,10 +507,7 @@ func (h *GatewayHandler) sendMCPError(c *gin.Context, id interface{}, code int, 
 		},
 	}
 	respBytes, _ := json.Marshal(errorResp)
-	c.Writer.Write([]byte("event: message\n"))
-	c.Writer.Write([]byte("data: "))
-	c.Writer.Write(respBytes)
-	c.Writer.Write([]byte("\n\n"))
+	writeSSEEvent(c.Writer, respBytes)
 }
 
 // isToolAllowed checks if a tool name is in the allowed list
@@ -637,7 +635,7 @@ func (h *GatewayHandler) ReadResource(c *gin.Context) {
 		body, _ := io.ReadAll(c.Request.Body)
 		var params map[string]interface{}
 		if len(body) > 0 {
-			json.Unmarshal(body, &params)
+			_ = json.Unmarshal(body, &params) // #nosec G104 -- parse errors handled via empty params
 		}
 		if transport == domain.TransportStreamableHTTP {
 			h.handleStreamableHTTPRequest(c, "resources/read", params)
@@ -683,7 +681,7 @@ func (h *GatewayHandler) GetPrompt(c *gin.Context) {
 		body, _ := io.ReadAll(c.Request.Body)
 		var params map[string]interface{}
 		if len(body) > 0 {
-			json.Unmarshal(body, &params)
+			_ = json.Unmarshal(body, &params) // #nosec G104 -- parse errors handled via empty params
 		}
 		if transport == domain.TransportStreamableHTTP {
 			h.handleStreamableHTTPRequest(c, "prompts/get", params)

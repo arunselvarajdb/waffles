@@ -3,6 +3,7 @@ package database
 import (
 	"context"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -35,9 +36,23 @@ func NewPostgresDB(cfg config.DatabaseConfig, log logger.Logger) (*DB, error) {
 		return nil, fmt.Errorf("failed to parse database config: %w", err)
 	}
 
-	// Set connection pool settings
-	poolConfig.MaxConns = int32(cfg.MaxOpenConns)
-	poolConfig.MinConns = int32(cfg.MaxIdleConns)
+	// Set connection pool settings with bounds checking to avoid integer overflow
+	maxConns := cfg.MaxOpenConns
+	if maxConns < 0 {
+		maxConns = 0
+	} else if maxConns > math.MaxInt32 {
+		maxConns = math.MaxInt32
+	}
+	poolConfig.MaxConns = int32(maxConns) // #nosec G115 -- bounds checked above
+
+	minConns := cfg.MaxIdleConns
+	if minConns < 0 {
+		minConns = 0
+	} else if minConns > math.MaxInt32 {
+		minConns = math.MaxInt32
+	}
+	poolConfig.MinConns = int32(minConns) // #nosec G115 -- bounds checked above
+
 	poolConfig.MaxConnLifetime = cfg.ConnMaxLifetime
 	poolConfig.MaxConnIdleTime = cfg.ConnMaxIdleTime
 

@@ -113,7 +113,7 @@ func (h *OAuthMetadataHandler) GetAuthorizationServerMetadata(c *gin.Context) {
 	// Fetch the OIDC discovery document from the authorization server
 	discoveryURL := strings.TrimSuffix(h.oauthConfig.Issuer, "/") + "/.well-known/openid-configuration"
 
-	resp, err := http.Get(discoveryURL)
+	resp, err := http.Get(discoveryURL) // #nosec G107 -- URL is constructed from admin-configured issuer
 	if err != nil {
 		h.logger.Error().Err(err).Str("url", discoveryURL).Msg("Failed to fetch OIDC discovery")
 		c.JSON(http.StatusBadGateway, gin.H{
@@ -155,5 +155,5 @@ func (h *OAuthMetadataHandler) GetAuthorizationServerMetadata(c *gin.Context) {
 		Msg("Serving proxied authorization server metadata")
 
 	c.Header("Content-Type", "application/json")
-	c.Writer.Write(body)
+	_, _ = c.Writer.Write(body) // #nosec G104 -- HTTP response write error is non-critical
 }

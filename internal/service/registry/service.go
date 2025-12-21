@@ -480,7 +480,7 @@ func (s *Service) testStreamableHTTPTransport(ctx context.Context, baseURL strin
 		notifyReq.Header.Set("mcp-session-id", sessionID)
 		notifyResp, err := client.Do(notifyReq)
 		if err == nil {
-			notifyResp.Body.Close()
+			_ = notifyResp.Body.Close() // #nosec G104 -- best effort close
 		}
 	}
 
@@ -510,7 +510,7 @@ func (s *Service) testStreamableHTTPTransport(ctx context.Context, baseURL strin
 			if strings.Contains(toolsContentType, "text/event-stream") || strings.HasPrefix(string(toolsRespBody), "event:") || strings.HasPrefix(string(toolsRespBody), "data:") {
 				toolsResult = s.parseSSEResponse(string(toolsRespBody))
 			} else {
-				json.Unmarshal(toolsRespBody, &toolsResult)
+				_ = json.Unmarshal(toolsRespBody, &toolsResult) // #nosec G104 -- parse errors handled via fallback
 			}
 
 			if rpcResult, ok := toolsResult["result"].(map[string]interface{}); ok {
@@ -618,7 +618,7 @@ func (s *Service) callToolStreamableHTTP(ctx context.Context, req *CallToolReque
 		result.ErrorMessage = fmt.Sprintf("Connection failed: %v", err)
 		return result
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close() // #nosec G104 -- best effort close
 
 	// Get session ID (check both header name variants)
 	sessionID := resp.Header.Get("MCP-Session-Id")
@@ -639,7 +639,7 @@ func (s *Service) callToolStreamableHTTP(ctx context.Context, req *CallToolReque
 		notifyReq.Header.Set("mcp-session-id", sessionID)
 		notifyResp, err := client.Do(notifyReq)
 		if err == nil {
-			notifyResp.Body.Close()
+			_ = notifyResp.Body.Close() // #nosec G104 -- best effort close
 		}
 	}
 
@@ -884,7 +884,7 @@ func (s *Service) testSSETransport(ctx context.Context, baseURL string) *TestCon
 		initResult = s.parseSSEResponse(bodyStr)
 	} else {
 		// Plain JSON
-		json.Unmarshal(bodyBytes, &initResult)
+		_ = json.Unmarshal(bodyBytes, &initResult) // #nosec G104 -- parse errors handled via fallback
 	}
 
 	if rpcResult, ok := initResult["result"].(map[string]interface{}); ok {
@@ -925,7 +925,7 @@ func (s *Service) testSSETransport(ctx context.Context, baseURL string) *TestCon
 		if strings.HasPrefix(toolsStr, "event:") || strings.HasPrefix(toolsStr, "data:") {
 			toolsResult = s.parseSSEResponse(toolsStr)
 		} else {
-			json.Unmarshal(toolsBytes, &toolsResult)
+			_ = json.Unmarshal(toolsBytes, &toolsResult) //nolint:errcheck // ignore parse errors, fallback handled
 		}
 
 		if rpcResult, ok := toolsResult["result"].(map[string]interface{}); ok {

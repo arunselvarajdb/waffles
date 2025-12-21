@@ -102,7 +102,7 @@ func (s *Service) fetchOIDCDiscovery(issuer string) (*OIDCDiscovery, error) {
 	// OIDC discovery endpoint is always at /.well-known/openid-configuration
 	discoveryURL := strings.TrimSuffix(issuer, "/") + "/.well-known/openid-configuration"
 
-	resp, err := http.Get(discoveryURL)
+	resp, err := http.Get(discoveryURL) // #nosec G107 -- URL is constructed from admin-configured issuer
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch discovery document: %w", err)
 	}

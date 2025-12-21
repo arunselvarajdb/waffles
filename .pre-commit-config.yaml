@@ -50,6 +50,13 @@ repos:
         types: [go]
         pass_filenames: false
 
+      - id: gosec
+        name: gosec security scanner
+        entry: "bash -c 'if command -v gosec &> /dev/null; then gosec -exclude-dir=test -exclude-dir=web -exclude-dir=node_modules -exclude-generated ./...; elif [ -f ~/go/bin/gosec ]; then ~/go/bin/gosec -exclude-dir=test -exclude-dir=web -exclude-dir=node_modules -exclude-generated ./...; else echo \"gosec not found, install with: go install github.com/securego/gosec/v2/cmd/gosec@latest\" && exit 1; fi'"
+        language: system
+        types: [go]
+        pass_filenames: false
+
   # JavaScript/Vue linting (disabled - no lint script configured)
   # - repo: local
   #   hooks:

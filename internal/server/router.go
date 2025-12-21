@@ -267,7 +267,8 @@ func (s *Server) setupSessionStore() sessions.Store {
 	// Get session secret from config or use a default for development
 	secret := s.config.Auth.SessionSecret
 	if secret == "" {
-		secret = "dev-session-secret-change-in-production-32b"
+		// This is a development-only fallback with a clear warning
+		secret = "dev-session-secret-change-in-production-32b" // #nosec G101 -- intentional dev default
 		s.logger.Warn().Msg("Using default session secret - please set auth.session_secret in production")
 	}
 
