@@ -8,7 +8,8 @@ on:
 
 permissions:
   contents: read
-  pull-requests: read
+  pull-requests: write
+  security-events: write
 
 jobs:
   lint:
@@ -65,7 +66,18 @@ jobs:
       - name: Run gosec Security Scanner
         run: gosec -exclude-dir=test -exclude-dir=web -exclude-dir=node_modules -exclude-generated ./...
 
-      - name: Run Trivy vulnerability scanner
+      - name: Run Trivy vulnerability scanner (table output)
+        id: trivy
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'table'
+          output: 'trivy-results.txt'
+          severity: 'HIGH,CRITICAL'
+          exit-code: '0'
+
+      - name: Run Trivy vulnerability scanner (SARIF for GitHub Security)
         uses: aquasecurity/trivy-action@0.28.0
         with:
           scan-type: 'fs'
@@ -73,7 +85,93 @@ jobs:
           format: 'sarif'
           output: 'trivy-results.sarif'
           severity: 'HIGH,CRITICAL'
-          exit-code: '1'
+          exit-code: '0'
+
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+      - name: Post Trivy scan results to PR comment
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const trivyResults = fs.readFileSync('trivy-results.txt', 'utf8');
+
+            // Check if there are any vulnerabilities
+            const hasVulnerabilities = trivyResults.includes('HIGH') || trivyResults.includes('CRITICAL');
+
+            let commentBody = '';
+            if (hasVulnerabilities) {
+              commentBody = `## :warning: Trivy Security Scan Results
+
+            **HIGH or CRITICAL vulnerabilities found!**
+
+            <details>
+            <summary>Click to expand scan results</summary>
+
+            \`\`\`
+            ${trivyResults}
+            \`\`\`
+
+            </details>
+
+            Please review and address these vulnerabilities before merging.`;
+            } else {
+              commentBody = `## :white_check_mark: Trivy Security Scan Results
+
+            **No HIGH or CRITICAL vulnerabilities found.**
+
+            <details>
+            <summary>Click to expand scan results</summary>
+
+            \`\`\`
+            ${trivyResults || 'No vulnerabilities detected.'}
+            \`\`\`
+
+            </details>`;
+            }
+
+            // Find existing comment
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+
+            const botComment = comments.find(comment =>
+              comment.user.type === 'Bot' &&
+              comment.body.includes('Trivy Security Scan Results')
+            );
+
+            if (botComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: commentBody
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: commentBody
+              });
+            }
+
+      - name: Check for HIGH/CRITICAL vulnerabilities
+        run: |
+          if grep -qE '(HIGH|CRITICAL)' trivy-results.txt 2>/dev/null; then
+            echo "::error::HIGH or CRITICAL vulnerabilities found!"
+            cat trivy-results.txt
+            exit 1
+          else
+            echo "No HIGH or CRITICAL vulnerabilities found."
+          fi
 
   frontend:
     name: Frontend Build & Test
@@ -151,13 +249,112 @@ jobs:
         run: |
           go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
 
-      - name: Check test coverage
+      - name: Generate coverage report
+        id: coverage
         run: |
+          # Get total coverage percentage
           coverage=$(go tool cover -func=coverage.out | grep total | awk '{print substr($3, 1, length($3)-1)}')
+          echo "coverage=$coverage" >> $GITHUB_OUTPUT
           echo "Total test coverage: ${coverage}%"
+
+          # Generate per-package coverage summary
+          go tool cover -func=coverage.out > coverage-summary.txt
+
+          # Check threshold
           threshold=50
           if (( $(echo "$coverage < $threshold" | bc -l) )); then
+            echo "below_threshold=true" >> $GITHUB_OUTPUT
             echo "Coverage ${coverage}% is below threshold ${threshold}%"
+          else
+            echo "below_threshold=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Post coverage to PR comment
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const coverage = '${{ steps.coverage.outputs.coverage }}';
+            const belowThreshold = '${{ steps.coverage.outputs.below_threshold }}' === 'true';
+            const threshold = 50;
+
+            // Read coverage summary
+            const coverageSummary = fs.readFileSync('coverage-summary.txt', 'utf8');
+
+            // Get per-package breakdown (last 20 lines before total)
+            const lines = coverageSummary.trim().split('\n');
+            const packageLines = lines.slice(-21, -1).join('\n');
+
+            // Determine emoji based on coverage
+            let emoji = ':red_circle:';
+            if (parseFloat(coverage) >= 80) emoji = ':green_circle:';
+            else if (parseFloat(coverage) >= 60) emoji = ':yellow_circle:';
+            else if (parseFloat(coverage) >= threshold) emoji = ':orange_circle:';
+
+            const statusIcon = belowThreshold ? ':x:' : ':white_check_mark:';
+            const statusText = belowThreshold
+              ? `**Below threshold!** Coverage ${coverage}% is below the required ${threshold}%`
+              : `**Passed!** Coverage ${coverage}% meets the ${threshold}% threshold`;
+
+            const commentBody = `## ${emoji} Code Coverage Report
+
+            | Metric | Value |
+            |--------|-------|
+            | **Total Coverage** | ${coverage}% |
+            | **Threshold** | ${threshold}% |
+            | **Status** | ${statusIcon} ${statusText} |
+
+            <details>
+            <summary>Per-package coverage breakdown</summary>
+
+            \`\`\`
+            ${packageLines}
+            \`\`\`
+
+            </details>
+
+            <details>
+            <summary>Full coverage report</summary>
+
+            \`\`\`
+            ${coverageSummary}
+            \`\`\`
+
+            </details>`;
+
+            // Find existing comment
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+
+            const botComment = comments.find(comment =>
+              comment.user.type === 'Bot' &&
+              comment.body.includes('Code Coverage Report')
+            );
+
+            if (botComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: commentBody
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: commentBody
+              });
+            }
+
+      - name: Check coverage threshold
+        run: |
+          if [ "${{ steps.coverage.outputs.below_threshold }}" = "true" ]; then
+            echo "::error::Coverage ${{ steps.coverage.outputs.coverage }}% is below threshold 50%"
             exit 1
           fi
 
