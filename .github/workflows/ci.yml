@@ -143,103 +143,23 @@ jobs:
         run: cd web-app && npm ci
 
       - name: Run tests with coverage
-        id: frontend_test
-        run: |
-          cd web-app
-          # Run tests with coverage (reporters configured in vitest.config.ts)
-          npm run test:coverage 2>&1 | tee test-output.txt
-          test_exit_code=${PIPESTATUS[0]}
+        run: cd web-app && npm run test:coverage
 
-          # Debug: show what we captured
-          echo "=== Test output preview ==="
-          cat test-output.txt | tail -20
-          echo "==========================="
-
-          # Parse test results from Vitest output
-          # Vitest format: "      Tests  522 passed (522)" (with leading whitespace)
-          # Use grep -E with more flexible pattern
-          test_line=$(grep -E "^\s*Tests\s+" test-output.txt | tail -1 || echo "")
-          echo "Test line found: '$test_line'"
-
-          if [ -n "$test_line" ]; then
-            # Extract total from parentheses at end: (522)
-            total_tests=$(echo "$test_line" | grep -oE '\([0-9]+\)$' | tr -d '()' || echo "0")
-            [ -z "$total_tests" ] && total_tests="0"
-
-            # Extract passed count: "522 passed"
-            passed_tests=$(echo "$test_line" | grep -oE '[0-9]+ passed' | head -1 | grep -oE '[0-9]+' || echo "0")
-            [ -z "$passed_tests" ] && passed_tests="0"
-
-            # Extract failed count (may not exist): "5 failed"
-            failed_tests=$(echo "$test_line" | grep -oE '[0-9]+ failed' | head -1 | grep -oE '[0-9]+' || echo "0")
-            [ -z "$failed_tests" ] && failed_tests="0"
-
-            # Extract skipped count (may not exist): "3 skipped"
-            skipped_tests=$(echo "$test_line" | grep -oE '[0-9]+ skipped' | head -1 | grep -oE '[0-9]+' || echo "0")
-            [ -z "$skipped_tests" ] && skipped_tests="0"
-          else
-            total_tests="0"
-            passed_tests="0"
-            failed_tests="0"
-            skipped_tests="0"
-          fi
-
-          # Parse coverage from text-summary - look for "All files" line
-          coverage_line=$(grep "All files" test-output.txt | head -1 || echo "")
-          if [ -n "$coverage_line" ]; then
-            # Coverage format: "All files |   XX.XX |   XX.XX |   XX.XX |   XX.XX |"
-            coverage=$(echo "$coverage_line" | awk -F'|' '{print $2}' | tr -d ' ' || echo "0")
-            [ -z "$coverage" ] && coverage="0"
-          else
-            coverage="0"
-          fi
-
-          echo "total_tests=$total_tests" >> $GITHUB_OUTPUT
-          echo "passed_tests=$passed_tests" >> $GITHUB_OUTPUT
-          echo "failed_tests=$failed_tests" >> $GITHUB_OUTPUT
-          echo "skipped_tests=$skipped_tests" >> $GITHUB_OUTPUT
-          echo "coverage=$coverage" >> $GITHUB_OUTPUT
-
-          echo "Frontend Tests: $passed_tests passed, $failed_tests failed, $skipped_tests skipped (total: $total_tests)"
-          echo "Frontend Coverage: $coverage%"
-
-          exit $test_exit_code
-
-      - name: Write frontend test results to job summary
+      - name: Upload frontend coverage report
+        uses: actions/upload-artifact@v4
         if: always()
-        run: |
-          echo "## 🎨 Frontend Test Results" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
+        with:
+          name: frontend-coverage-report
+          path: web-app/coverage/
+          retention-days: 7
 
-          total="${{ steps.frontend_test.outputs.total_tests }}"
-          passed="${{ steps.frontend_test.outputs.passed_tests }}"
-          failed="${{ steps.frontend_test.outputs.failed_tests }}"
-          skipped="${{ steps.frontend_test.outputs.skipped_tests }}"
-          coverage="${{ steps.frontend_test.outputs.coverage }}"
-
-          # Determine test status emoji
-          if [ "$failed" != "0" ] && [ -n "$failed" ]; then
-            test_emoji="❌"
-          else
-            test_emoji="✅"
-          fi
-
-          echo "### Test Summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Metric | Count |" >> $GITHUB_STEP_SUMMARY
-          echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
-          echo "| $test_emoji **Total Tests** | $total |" >> $GITHUB_STEP_SUMMARY
-          echo "| ✅ **Passed** | $passed |" >> $GITHUB_STEP_SUMMARY
-          echo "| ❌ **Failed** | $failed |" >> $GITHUB_STEP_SUMMARY
-          echo "| ⏭️ **Skipped** | $skipped |" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-
-          # Coverage section
-          echo "### Code Coverage" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
-          echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
-          echo "| **Statement Coverage** | ${coverage}% |" >> $GITHUB_STEP_SUMMARY
+      - name: Upload frontend coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          directory: ./web-app/coverage/
+          flags: frontend
+          name: frontend-coverage
+          fail_ci_if_error: false
 
       - name: Build frontend
         run: cd web-app && npm run build
@@ -286,7 +206,6 @@ jobs:
         run: go mod download
 
       - name: Run tests with race detection
-        id: go_test
         env:
           DATABASE_HOST: localhost
           DATABASE_PORT: 5432
@@ -295,122 +214,36 @@ jobs:
           DATABASE_NAME: test_db
           REDIS_HOST: localhost
           REDIS_PORT: 6379
+        run: go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
+
+      - name: Generate HTML coverage report
         run: |
-          # Run tests and capture output
-          go test -v -race -coverprofile=coverage.out -covermode=atomic ./... 2>&1 | tee test-output.txt
-          test_exit_code=${PIPESTATUS[0]}
-
-          # Count tests - use grep with || true to prevent failure on no match
-          passed_tests=$(grep -c "^--- PASS" test-output.txt 2>/dev/null || true)
-          failed_tests=$(grep -c "^--- FAIL" test-output.txt 2>/dev/null || true)
-          skipped_tests=$(grep -c "^--- SKIP" test-output.txt 2>/dev/null || true)
-
-          # Ensure we have valid numbers (default to 0 if empty)
-          passed_tests=${passed_tests:-0}
-          failed_tests=${failed_tests:-0}
-          skipped_tests=${skipped_tests:-0}
-          total_tests=$((passed_tests + failed_tests + skipped_tests))
-
-          echo "total_tests=$total_tests" >> $GITHUB_OUTPUT
-          echo "passed_tests=$passed_tests" >> $GITHUB_OUTPUT
-          echo "failed_tests=$failed_tests" >> $GITHUB_OUTPUT
-          echo "skipped_tests=$skipped_tests" >> $GITHUB_OUTPUT
-
-          echo "Backend Tests: $passed_tests passed, $failed_tests failed, $skipped_tests skipped (total: $total_tests)"
-
-          exit $test_exit_code
-
-      - name: Generate coverage report
-        id: coverage
-        run: |
-          # Get total coverage percentage
+          mkdir -p coverage
+          go tool cover -html=coverage.out -o coverage/index.html
+          go tool cover -func=coverage.out > coverage/coverage.txt
+          # Check coverage threshold
           coverage=$(go tool cover -func=coverage.out | grep total | awk '{print substr($3, 1, length($3)-1)}')
-          echo "coverage=$coverage" >> $GITHUB_OUTPUT
           echo "Total test coverage: ${coverage}%"
-
-          # Generate per-package coverage summary
-          go tool cover -func=coverage.out > coverage-summary.txt
-
-          # Check threshold
           threshold=50
           if (( $(echo "$coverage < $threshold" | bc -l) )); then
-            echo "below_threshold=true" >> $GITHUB_OUTPUT
-            echo "Coverage ${coverage}% is below threshold ${threshold}%"
-          else
-            echo "below_threshold=false" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Write backend test results to job summary
-        if: always()
-        run: |
-          echo "## 🧪 Backend Test Results" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-
-          total="${{ steps.go_test.outputs.total_tests }}"
-          passed="${{ steps.go_test.outputs.passed_tests }}"
-          failed="${{ steps.go_test.outputs.failed_tests }}"
-          skipped="${{ steps.go_test.outputs.skipped_tests }}"
-          coverage="${{ steps.coverage.outputs.coverage }}"
-          below_threshold="${{ steps.coverage.outputs.below_threshold }}"
-
-          # Determine test status emoji
-          if [ "$failed" != "0" ] && [ -n "$failed" ]; then
-            test_emoji="❌"
-          else
-            test_emoji="✅"
-          fi
-
-          echo "### Test Summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Metric | Count |" >> $GITHUB_STEP_SUMMARY
-          echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
-          echo "| $test_emoji **Total Tests** | $total |" >> $GITHUB_STEP_SUMMARY
-          echo "| ✅ **Passed** | $passed |" >> $GITHUB_STEP_SUMMARY
-          echo "| ❌ **Failed** | $failed |" >> $GITHUB_STEP_SUMMARY
-          echo "| ⏭️ **Skipped** | $skipped |" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-
-          # Coverage section
-          if [ "$below_threshold" = "true" ]; then
-            coverage_emoji="🔴"
-            status_text="❌ Below threshold (50%)"
-          else
-            coverage_emoji="🟢"
-            status_text="✅ Meets threshold (50%)"
-          fi
-
-          echo "### Code Coverage" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
-          echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
-          echo "| $coverage_emoji **Total Coverage** | ${coverage}% |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Status** | $status_text |" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-
-          # Per-package breakdown (only if file exists)
-          if [ -f coverage-summary.txt ]; then
-            echo "<details>" >> $GITHUB_STEP_SUMMARY
-            echo "<summary>Per-package coverage breakdown</summary>" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo '```' >> $GITHUB_STEP_SUMMARY
-            tail -20 coverage-summary.txt >> $GITHUB_STEP_SUMMARY
-            echo '```' >> $GITHUB_STEP_SUMMARY
-            echo "</details>" >> $GITHUB_STEP_SUMMARY
-          fi
-
-      - name: Check coverage threshold
-        run: |
-          if [ "${{ steps.coverage.outputs.below_threshold }}" = "true" ]; then
-            echo "::error::Coverage ${{ steps.coverage.outputs.coverage }}% is below threshold 50%"
+            echo "::error::Coverage ${coverage}% is below threshold ${threshold}%"
             exit 1
           fi
+
+      - name: Upload backend coverage report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: backend-coverage-report
+          path: coverage/
+          retention-days: 7
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
         with:
           file: ./coverage.out
-          flags: unittests
-          name: codecov-umbrella
+          flags: backend
+          name: backend-coverage
           fail_ci_if_error: false
 
   build:
@@ -496,6 +329,13 @@ jobs:
           echo "| Test | $(get_emoji ${{ needs.test.result }}) ${{ needs.test.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Build | $(get_emoji ${{ needs.build.result }}) ${{ needs.build.result }} |" >> $GITHUB_STEP_SUMMARY
 
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          echo "### 📊 Coverage Reports" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Download coverage reports from the **Artifacts** section below:" >> $GITHUB_STEP_SUMMARY
+          echo "- **frontend-coverage-report** - Vue/Vitest HTML coverage" >> $GITHUB_STEP_SUMMARY
+          echo "- **backend-coverage-report** - Go HTML coverage" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
 
           if [ "${{ needs.lint.result }}" != "success" ] || \
