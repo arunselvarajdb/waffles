@@ -8,7 +8,6 @@ on:
 
 permissions:
   contents: read
-  pull-requests: write
   security-events: write
 
 jobs:
@@ -93,75 +92,28 @@ jobs:
         with:
           sarif_file: 'trivy-results.sarif'
 
-      - name: Post Trivy scan results to PR comment
-        if: github.event_name == 'pull_request'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const fs = require('fs');
-            const trivyResults = fs.readFileSync('trivy-results.txt', 'utf8');
+      - name: Write Trivy results to job summary
+        run: |
+          echo "## 🔒 Security Scan Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
 
-            // Check if there are any vulnerabilities
-            const hasVulnerabilities = trivyResults.includes('HIGH') || trivyResults.includes('CRITICAL');
-
-            let commentBody = '';
-            if (hasVulnerabilities) {
-              commentBody = `## :warning: Trivy Security Scan Results
-
-            **HIGH or CRITICAL vulnerabilities found!**
-
-            <details>
-            <summary>Click to expand scan results</summary>
-
-            \`\`\`
-            ${trivyResults}
-            \`\`\`
-
-            </details>
-
-            Please review and address these vulnerabilities before merging.`;
-            } else {
-              commentBody = `## :white_check_mark: Trivy Security Scan Results
-
-            **No HIGH or CRITICAL vulnerabilities found.**
-
-            <details>
-            <summary>Click to expand scan results</summary>
-
-            \`\`\`
-            ${trivyResults || 'No vulnerabilities detected.'}
-            \`\`\`
-
-            </details>`;
-            }
-
-            // Find existing comment
-            const { data: comments } = await github.rest.issues.listComments({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-            });
-
-            const botComment = comments.find(comment =>
-              comment.user.type === 'Bot' &&
-              comment.body.includes('Trivy Security Scan Results')
-            );
-
-            if (botComment) {
-              await github.rest.issues.updateComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                comment_id: botComment.id,
-                body: commentBody
-              });
-            } else {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: context.issue.number,
-                body: commentBody
-              });
-            }
+          if grep -qE '(HIGH|CRITICAL)' trivy-results.txt 2>/dev/null; then
+            echo "### ⚠️ Vulnerabilities Found" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "HIGH or CRITICAL vulnerabilities detected!" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "<details>" >> $GITHUB_STEP_SUMMARY
+            echo "<summary>Click to expand scan results</summary>" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            cat trivy-results.txt >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            echo "</details>" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### ✅ No Vulnerabilities Found" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "No HIGH or CRITICAL vulnerabilities detected." >> $GITHUB_STEP_SUMMARY
+          fi
 
       - name: Check for HIGH/CRITICAL vulnerabilities
         run: |
@@ -195,15 +147,26 @@ jobs:
         run: |
           cd web-app
           # Run tests with coverage and capture output
-          npm test -- --coverage --coverageReporters=text --coverageReporters=text-summary 2>&1 | tee test-output.txt || true
+          npm test -- --coverage --coverageReporters=text --coverageReporters=text-summary 2>&1 | tee test-output.txt
+          test_exit_code=${PIPESTATUS[0]}
 
           # Parse test results from Vitest output
-          if grep -q "Tests:" test-output.txt; then
-            # Extract test counts from Vitest format: "Tests:  X passed, Y failed, Z total"
-            total_tests=$(grep "Tests:" test-output.txt | grep -oP '\d+(?= total)' | head -1 || echo "0")
-            passed_tests=$(grep "Tests:" test-output.txt | grep -oP '\d+(?= passed)' | head -1 || echo "0")
-            failed_tests=$(grep "Tests:" test-output.txt | grep -oP '\d+(?= failed)' | head -1 || echo "0")
-            skipped_tests=$(grep "Tests:" test-output.txt | grep -oP '\d+(?= skipped)' | head -1 || echo "0")
+          # Format: "Tests  522 passed (522)" or "Tests  5 failed | 517 passed (522)"
+          if grep -q "Tests" test-output.txt; then
+            # Extract from the summary line
+            test_line=$(grep "Tests" test-output.txt | tail -1)
+
+            # Extract total from parentheses
+            total_tests=$(echo "$test_line" | grep -oE '\([0-9]+\)' | tr -d '()' || echo "0")
+
+            # Extract passed count
+            passed_tests=$(echo "$test_line" | grep -oE '[0-9]+ passed' | grep -oE '[0-9]+' || echo "0")
+
+            # Extract failed count (may not exist)
+            failed_tests=$(echo "$test_line" | grep -oE '[0-9]+ failed' | grep -oE '[0-9]+' || echo "0")
+
+            # Extract skipped count (may not exist)
+            skipped_tests=$(echo "$test_line" | grep -oE '[0-9]+ skipped' | grep -oE '[0-9]+' || echo "0")
           else
             total_tests="0"
             passed_tests="0"
@@ -211,9 +174,10 @@ jobs:
             skipped_tests="0"
           fi
 
-          # Parse coverage from text-summary
+          # Parse coverage from text-summary - look for "All files" line
           if grep -q "All files" test-output.txt; then
-            coverage=$(grep "All files" test-output.txt | awk '{print $4}' | tr -d '%' || echo "0")
+            # Coverage format: "All files |   XX.XX |   XX.XX |   XX.XX |   XX.XX |"
+            coverage=$(grep "All files" test-output.txt | awk -F'|' '{print $2}' | tr -d ' ' || echo "0")
           else
             coverage="0"
           fi
@@ -227,73 +191,43 @@ jobs:
           echo "Frontend Tests: $passed_tests passed, $failed_tests failed, $skipped_tests skipped (total: $total_tests)"
           echo "Frontend Coverage: $coverage%"
 
-          # Fail if there were test failures
-          if [ "$failed_tests" != "0" ] && [ "$failed_tests" != "" ]; then
-            exit 1
+          exit $test_exit_code
+
+      - name: Write frontend test results to job summary
+        if: always()
+        run: |
+          echo "## 🎨 Frontend Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          total="${{ steps.frontend_test.outputs.total_tests }}"
+          passed="${{ steps.frontend_test.outputs.passed_tests }}"
+          failed="${{ steps.frontend_test.outputs.failed_tests }}"
+          skipped="${{ steps.frontend_test.outputs.skipped_tests }}"
+          coverage="${{ steps.frontend_test.outputs.coverage }}"
+
+          # Determine test status emoji
+          if [ "$failed" != "0" ] && [ -n "$failed" ]; then
+            test_emoji="❌"
+          else
+            test_emoji="✅"
           fi
 
-      - name: Post frontend test results to PR comment
-        if: github.event_name == 'pull_request'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const totalTests = '${{ steps.frontend_test.outputs.total_tests }}' || '0';
-            const passedTests = '${{ steps.frontend_test.outputs.passed_tests }}' || '0';
-            const failedTests = '${{ steps.frontend_test.outputs.failed_tests }}' || '0';
-            const skippedTests = '${{ steps.frontend_test.outputs.skipped_tests }}' || '0';
-            const coverage = '${{ steps.frontend_test.outputs.coverage }}' || '0';
+          echo "### Test Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Metric | Count |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| $test_emoji **Total Tests** | $total |" >> $GITHUB_STEP_SUMMARY
+          echo "| ✅ **Passed** | $passed |" >> $GITHUB_STEP_SUMMARY
+          echo "| ❌ **Failed** | $failed |" >> $GITHUB_STEP_SUMMARY
+          echo "| ⏭️ **Skipped** | $skipped |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
 
-            // Test status emoji
-            const testEmoji = parseInt(failedTests) > 0 ? ':x:' : ':white_check_mark:';
-
-            // Coverage emoji
-            let coverageEmoji = ':red_circle:';
-            if (parseFloat(coverage) >= 80) coverageEmoji = ':green_circle:';
-            else if (parseFloat(coverage) >= 60) coverageEmoji = ':yellow_circle:';
-            else if (parseFloat(coverage) >= 40) coverageEmoji = ':orange_circle:';
-
-            const commentBody = `## :art: Frontend Test Results
-
-            ### Test Summary
-            | Metric | Count |
-            |--------|-------|
-            | ${testEmoji} **Total Tests** | ${totalTests} |
-            | :white_check_mark: **Passed** | ${passedTests} |
-            | :x: **Failed** | ${failedTests} |
-            | :fast_forward: **Skipped** | ${skippedTests} |
-
-            ### ${coverageEmoji} Code Coverage
-            | Metric | Value |
-            |--------|-------|
-            | **Statement Coverage** | ${coverage}% |`;
-
-            // Find existing comment
-            const { data: comments } = await github.rest.issues.listComments({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-            });
-
-            const botComment = comments.find(comment =>
-              comment.user.type === 'Bot' &&
-              comment.body.includes('Frontend Test Results')
-            );
-
-            if (botComment) {
-              await github.rest.issues.updateComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                comment_id: botComment.id,
-                body: commentBody
-              });
-            } else {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: context.issue.number,
-                body: commentBody
-              });
-            }
+          # Coverage section
+          echo "### Code Coverage" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| **Statement Coverage** | ${coverage}% |" >> $GITHUB_STEP_SUMMARY
 
       - name: Build frontend
         run: cd web-app && npm run build
@@ -352,6 +286,7 @@ jobs:
         run: |
           # Run tests and capture output
           go test -v -race -coverprofile=coverage.out -covermode=atomic ./... 2>&1 | tee test-output.txt
+          test_exit_code=${PIPESTATUS[0]}
 
           # Count tests
           total_tests=$(grep -c "^--- PASS\|^--- FAIL\|^--- SKIP" test-output.txt || echo "0")
@@ -365,6 +300,8 @@ jobs:
           echo "skipped_tests=$skipped_tests" >> $GITHUB_OUTPUT
 
           echo "Backend Tests: $passed_tests passed, $failed_tests failed, $skipped_tests skipped (total: $total_tests)"
+
+          exit $test_exit_code
 
       - name: Generate coverage report
         id: coverage
@@ -386,105 +323,61 @@ jobs:
             echo "below_threshold=false" >> $GITHUB_OUTPUT
           fi
 
-      - name: Post coverage to PR comment
-        if: github.event_name == 'pull_request'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const fs = require('fs');
-            const coverage = '${{ steps.coverage.outputs.coverage }}';
-            const belowThreshold = '${{ steps.coverage.outputs.below_threshold }}' === 'true';
-            const threshold = 50;
+      - name: Write backend test results to job summary
+        if: always()
+        run: |
+          echo "## 🧪 Backend Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
 
-            // Test counts from backend
-            const totalTests = '${{ steps.go_test.outputs.total_tests }}';
-            const passedTests = '${{ steps.go_test.outputs.passed_tests }}';
-            const failedTests = '${{ steps.go_test.outputs.failed_tests }}';
-            const skippedTests = '${{ steps.go_test.outputs.skipped_tests }}';
+          total="${{ steps.go_test.outputs.total_tests }}"
+          passed="${{ steps.go_test.outputs.passed_tests }}"
+          failed="${{ steps.go_test.outputs.failed_tests }}"
+          skipped="${{ steps.go_test.outputs.skipped_tests }}"
+          coverage="${{ steps.coverage.outputs.coverage }}"
+          below_threshold="${{ steps.coverage.outputs.below_threshold }}"
 
-            // Read coverage summary
-            const coverageSummary = fs.readFileSync('coverage-summary.txt', 'utf8');
+          # Determine test status emoji
+          if [ "$failed" != "0" ] && [ -n "$failed" ]; then
+            test_emoji="❌"
+          else
+            test_emoji="✅"
+          fi
 
-            // Get per-package breakdown (last 20 lines before total)
-            const lines = coverageSummary.trim().split('\n');
-            const packageLines = lines.slice(-21, -1).join('\n');
+          echo "### Test Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Metric | Count |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| $test_emoji **Total Tests** | $total |" >> $GITHUB_STEP_SUMMARY
+          echo "| ✅ **Passed** | $passed |" >> $GITHUB_STEP_SUMMARY
+          echo "| ❌ **Failed** | $failed |" >> $GITHUB_STEP_SUMMARY
+          echo "| ⏭️ **Skipped** | $skipped |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
 
-            // Determine emoji based on coverage
-            let coverageEmoji = ':red_circle:';
-            if (parseFloat(coverage) >= 80) coverageEmoji = ':green_circle:';
-            else if (parseFloat(coverage) >= 60) coverageEmoji = ':yellow_circle:';
-            else if (parseFloat(coverage) >= threshold) coverageEmoji = ':orange_circle:';
+          # Coverage section
+          if [ "$below_threshold" = "true" ]; then
+            coverage_emoji="🔴"
+            status_text="❌ Below threshold (50%)"
+          else
+            coverage_emoji="🟢"
+            status_text="✅ Meets threshold (50%)"
+          fi
 
-            // Test status emoji
-            const testEmoji = parseInt(failedTests) > 0 ? ':x:' : ':white_check_mark:';
+          echo "### Code Coverage" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| $coverage_emoji **Total Coverage** | ${coverage}% |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Status** | $status_text |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
 
-            const statusIcon = belowThreshold ? ':x:' : ':white_check_mark:';
-            const statusText = belowThreshold
-              ? `**Below threshold!** Coverage ${coverage}% is below the required ${threshold}%`
-              : `**Passed!** Coverage ${coverage}% meets the ${threshold}% threshold`;
-
-            const commentBody = `## :test_tube: Backend Test Results
-
-            ### Test Summary
-            | Metric | Count |
-            |--------|-------|
-            | ${testEmoji} **Total Tests** | ${totalTests} |
-            | :white_check_mark: **Passed** | ${passedTests} |
-            | :x: **Failed** | ${failedTests} |
-            | :fast_forward: **Skipped** | ${skippedTests} |
-
-            ### ${coverageEmoji} Code Coverage
-            | Metric | Value |
-            |--------|-------|
-            | **Total Coverage** | ${coverage}% |
-            | **Threshold** | ${threshold}% |
-            | **Status** | ${statusIcon} ${statusText} |
-
-            <details>
-            <summary>Per-package coverage breakdown</summary>
-
-            \`\`\`
-            ${packageLines}
-            \`\`\`
-
-            </details>
-
-            <details>
-            <summary>Full coverage report</summary>
-
-            \`\`\`
-            ${coverageSummary}
-            \`\`\`
-
-            </details>`;
-
-            // Find existing comment
-            const { data: comments } = await github.rest.issues.listComments({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-            });
-
-            const botComment = comments.find(comment =>
-              comment.user.type === 'Bot' &&
-              comment.body.includes('Backend Test Results')
-            );
-
-            if (botComment) {
-              await github.rest.issues.updateComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                comment_id: botComment.id,
-                body: commentBody
-              });
-            } else {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: context.issue.number,
-                body: commentBody
-              });
-            }
+          # Per-package breakdown
+          echo "<details>" >> $GITHUB_STEP_SUMMARY
+          echo "<summary>Per-package coverage breakdown</summary>" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          tail -20 coverage-summary.txt >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "</details>" >> $GITHUB_STEP_SUMMARY
 
       - name: Check coverage threshold
         run: |
@@ -562,19 +455,37 @@ jobs:
     steps:
       - name: Check job results
         run: |
-          echo "Lint: ${{ needs.lint.result }}"
-          echo "Security: ${{ needs.security.result }}"
-          echo "Frontend: ${{ needs.frontend.result }}"
-          echo "Test: ${{ needs.test.result }}"
-          echo "Build: ${{ needs.build.result }}"
+          echo "## 📊 CI Pipeline Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Job | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
+
+          # Function to convert result to emoji
+          get_emoji() {
+            case "$1" in
+              success) echo "✅" ;;
+              failure) echo "❌" ;;
+              cancelled) echo "⏹️" ;;
+              skipped) echo "⏭️" ;;
+              *) echo "❓" ;;
+            esac
+          }
+
+          echo "| Lint | $(get_emoji ${{ needs.lint.result }}) ${{ needs.lint.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Security | $(get_emoji ${{ needs.security.result }}) ${{ needs.security.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Frontend | $(get_emoji ${{ needs.frontend.result }}) ${{ needs.frontend.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Test | $(get_emoji ${{ needs.test.result }}) ${{ needs.test.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Build | $(get_emoji ${{ needs.build.result }}) ${{ needs.build.result }} |" >> $GITHUB_STEP_SUMMARY
+
+          echo "" >> $GITHUB_STEP_SUMMARY
 
           if [ "${{ needs.lint.result }}" != "success" ] || \
              [ "${{ needs.security.result }}" != "success" ] || \
              [ "${{ needs.frontend.result }}" != "success" ] || \
              [ "${{ needs.test.result }}" != "success" ] || \
              [ "${{ needs.build.result }}" != "success" ]; then
-            echo "❌ CI pipeline failed"
+            echo "### ❌ CI Pipeline Failed" >> $GITHUB_STEP_SUMMARY
             exit 1
           fi
 
-          echo "✅ All CI checks passed"
+          echo "### ✅ All CI Checks Passed" >> $GITHUB_STEP_SUMMARY
