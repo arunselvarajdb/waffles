@@ -190,8 +190,110 @@ jobs:
       - name: Install dependencies
         run: cd web-app && npm ci
 
-      - name: Run tests
-        run: cd web-app && npm test
+      - name: Run tests with coverage
+        id: frontend_test
+        run: |
+          cd web-app
+          # Run tests with coverage and capture output
+          npm test -- --coverage --coverageReporters=text --coverageReporters=text-summary 2>&1 | tee test-output.txt || true
+
+          # Parse test results from Vitest output
+          if grep -q "Tests:" test-output.txt; then
+            # Extract test counts from Vitest format: "Tests:  X passed, Y failed, Z total"
+            total_tests=$(grep "Tests:" test-output.txt | grep -oP '\d+(?= total)' | head -1 || echo "0")
+            passed_tests=$(grep "Tests:" test-output.txt | grep -oP '\d+(?= passed)' | head -1 || echo "0")
+            failed_tests=$(grep "Tests:" test-output.txt | grep -oP '\d+(?= failed)' | head -1 || echo "0")
+            skipped_tests=$(grep "Tests:" test-output.txt | grep -oP '\d+(?= skipped)' | head -1 || echo "0")
+          else
+            total_tests="0"
+            passed_tests="0"
+            failed_tests="0"
+            skipped_tests="0"
+          fi
+
+          # Parse coverage from text-summary
+          if grep -q "All files" test-output.txt; then
+            coverage=$(grep "All files" test-output.txt | awk '{print $4}' | tr -d '%' || echo "0")
+          else
+            coverage="0"
+          fi
+
+          echo "total_tests=$total_tests" >> $GITHUB_OUTPUT
+          echo "passed_tests=$passed_tests" >> $GITHUB_OUTPUT
+          echo "failed_tests=$failed_tests" >> $GITHUB_OUTPUT
+          echo "skipped_tests=$skipped_tests" >> $GITHUB_OUTPUT
+          echo "coverage=$coverage" >> $GITHUB_OUTPUT
+
+          echo "Frontend Tests: $passed_tests passed, $failed_tests failed, $skipped_tests skipped (total: $total_tests)"
+          echo "Frontend Coverage: $coverage%"
+
+          # Fail if there were test failures
+          if [ "$failed_tests" != "0" ] && [ "$failed_tests" != "" ]; then
+            exit 1
+          fi
+
+      - name: Post frontend test results to PR comment
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const totalTests = '${{ steps.frontend_test.outputs.total_tests }}' || '0';
+            const passedTests = '${{ steps.frontend_test.outputs.passed_tests }}' || '0';
+            const failedTests = '${{ steps.frontend_test.outputs.failed_tests }}' || '0';
+            const skippedTests = '${{ steps.frontend_test.outputs.skipped_tests }}' || '0';
+            const coverage = '${{ steps.frontend_test.outputs.coverage }}' || '0';
+
+            // Test status emoji
+            const testEmoji = parseInt(failedTests) > 0 ? ':x:' : ':white_check_mark:';
+
+            // Coverage emoji
+            let coverageEmoji = ':red_circle:';
+            if (parseFloat(coverage) >= 80) coverageEmoji = ':green_circle:';
+            else if (parseFloat(coverage) >= 60) coverageEmoji = ':yellow_circle:';
+            else if (parseFloat(coverage) >= 40) coverageEmoji = ':orange_circle:';
+
+            const commentBody = `## :art: Frontend Test Results
+
+            ### Test Summary
+            | Metric | Count |
+            |--------|-------|
+            | ${testEmoji} **Total Tests** | ${totalTests} |
+            | :white_check_mark: **Passed** | ${passedTests} |
+            | :x: **Failed** | ${failedTests} |
+            | :fast_forward: **Skipped** | ${skippedTests} |
+
+            ### ${coverageEmoji} Code Coverage
+            | Metric | Value |
+            |--------|-------|
+            | **Statement Coverage** | ${coverage}% |`;
+
+            // Find existing comment
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+
+            const botComment = comments.find(comment =>
+              comment.user.type === 'Bot' &&
+              comment.body.includes('Frontend Test Results')
+            );
+
+            if (botComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: commentBody
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: commentBody
+              });
+            }
 
       - name: Build frontend
         run: cd web-app && npm run build
@@ -238,6 +340,7 @@ jobs:
         run: go mod download
 
       - name: Run tests with race detection
+        id: go_test
         env:
           DATABASE_HOST: localhost
           DATABASE_PORT: 5432
@@ -247,7 +350,21 @@ jobs:
           REDIS_HOST: localhost
           REDIS_PORT: 6379
         run: |
-          go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
+          # Run tests and capture output
+          go test -v -race -coverprofile=coverage.out -covermode=atomic ./... 2>&1 | tee test-output.txt
+
+          # Count tests
+          total_tests=$(grep -c "^--- PASS\|^--- FAIL\|^--- SKIP" test-output.txt || echo "0")
+          passed_tests=$(grep -c "^--- PASS" test-output.txt || echo "0")
+          failed_tests=$(grep -c "^--- FAIL" test-output.txt || echo "0")
+          skipped_tests=$(grep -c "^--- SKIP" test-output.txt || echo "0")
+
+          echo "total_tests=$total_tests" >> $GITHUB_OUTPUT
+          echo "passed_tests=$passed_tests" >> $GITHUB_OUTPUT
+          echo "failed_tests=$failed_tests" >> $GITHUB_OUTPUT
+          echo "skipped_tests=$skipped_tests" >> $GITHUB_OUTPUT
+
+          echo "Backend Tests: $passed_tests passed, $failed_tests failed, $skipped_tests skipped (total: $total_tests)"
 
       - name: Generate coverage report
         id: coverage
@@ -279,6 +396,12 @@ jobs:
             const belowThreshold = '${{ steps.coverage.outputs.below_threshold }}' === 'true';
             const threshold = 50;
 
+            // Test counts from backend
+            const totalTests = '${{ steps.go_test.outputs.total_tests }}';
+            const passedTests = '${{ steps.go_test.outputs.passed_tests }}';
+            const failedTests = '${{ steps.go_test.outputs.failed_tests }}';
+            const skippedTests = '${{ steps.go_test.outputs.skipped_tests }}';
+
             // Read coverage summary
             const coverageSummary = fs.readFileSync('coverage-summary.txt', 'utf8');
 
@@ -287,18 +410,30 @@ jobs:
             const packageLines = lines.slice(-21, -1).join('\n');
 
             // Determine emoji based on coverage
-            let emoji = ':red_circle:';
-            if (parseFloat(coverage) >= 80) emoji = ':green_circle:';
-            else if (parseFloat(coverage) >= 60) emoji = ':yellow_circle:';
-            else if (parseFloat(coverage) >= threshold) emoji = ':orange_circle:';
+            let coverageEmoji = ':red_circle:';
+            if (parseFloat(coverage) >= 80) coverageEmoji = ':green_circle:';
+            else if (parseFloat(coverage) >= 60) coverageEmoji = ':yellow_circle:';
+            else if (parseFloat(coverage) >= threshold) coverageEmoji = ':orange_circle:';
+
+            // Test status emoji
+            const testEmoji = parseInt(failedTests) > 0 ? ':x:' : ':white_check_mark:';
 
             const statusIcon = belowThreshold ? ':x:' : ':white_check_mark:';
             const statusText = belowThreshold
               ? `**Below threshold!** Coverage ${coverage}% is below the required ${threshold}%`
               : `**Passed!** Coverage ${coverage}% meets the ${threshold}% threshold`;
 
-            const commentBody = `## ${emoji} Code Coverage Report
+            const commentBody = `## :test_tube: Backend Test Results
 
+            ### Test Summary
+            | Metric | Count |
+            |--------|-------|
+            | ${testEmoji} **Total Tests** | ${totalTests} |
+            | :white_check_mark: **Passed** | ${passedTests} |
+            | :x: **Failed** | ${failedTests} |
+            | :fast_forward: **Skipped** | ${skippedTests} |
+
+            ### ${coverageEmoji} Code Coverage
             | Metric | Value |
             |--------|-------|
             | **Total Coverage** | ${coverage}% |
@@ -332,7 +467,7 @@ jobs:
 
             const botComment = comments.find(comment =>
               comment.user.type === 'Bot' &&
-              comment.body.includes('Code Coverage Report')
+              comment.body.includes('Backend Test Results')
             );
 
             if (botComment) {
