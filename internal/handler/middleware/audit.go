@@ -11,8 +11,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
-	"github.com/waffles/mcp-gateway/internal/domain"
-	"github.com/waffles/mcp-gateway/internal/service/audit"
+	"github.com/waffles/waffles/internal/domain"
+	"github.com/waffles/waffles/internal/service/audit"
 )
 
 // responseWriter wraps gin.ResponseWriter to capture response body

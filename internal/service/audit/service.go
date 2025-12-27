@@ -3,8 +3,8 @@ package audit
 import (
 	"context"
 
-	"github.com/waffles/mcp-gateway/internal/domain"
-	"github.com/waffles/mcp-gateway/pkg/logger"
+	"github.com/waffles/waffles/internal/domain"
+	"github.com/waffles/waffles/pkg/logger"
 )
 
 // Repository defines the interface for audit log data access.

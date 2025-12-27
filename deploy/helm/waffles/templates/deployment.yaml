@@ -1,0 +1,166 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "waffles.fullname" . }}
+  labels:
+    {{- include "waffles.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "waffles.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "waffles.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "waffles.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- with .Values.initContainers }}
+      initContainers:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: {{ .Chart.Name }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.config.server.port }}
+              protocol: TCP
+            {{- if .Values.config.metrics.enabled }}
+            - name: metrics
+              containerPort: {{ .Values.config.metrics.prometheusPort }}
+              protocol: TCP
+            {{- end }}
+          livenessProbe:
+            {{- toYaml .Values.livenessProbe | nindent 12 }}
+          readinessProbe:
+            {{- toYaml .Values.readinessProbe | nindent 12 }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          env:
+            # Server configuration
+            - name: SERVER_PORT
+              value: {{ .Values.config.server.port | quote }}
+            - name: SERVER_ENVIRONMENT
+              value: {{ .Values.config.server.environment | quote }}
+
+            # Database configuration
+            - name: DATABASE_HOST
+              value: {{ include "waffles.databaseHost" . | quote }}
+            - name: DATABASE_PORT
+              value: {{ include "waffles.databasePort" . | quote }}
+            - name: DATABASE_USER
+              value: {{ include "waffles.databaseUser" . | quote }}
+            - name: DATABASE_NAME
+              value: {{ include "waffles.databaseName" . | quote }}
+            - name: DATABASE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "waffles.databaseSecretName" . }}
+                  key: {{ include "waffles.databaseSecretKey" . }}
+
+            # Auth configuration
+            - name: AUTH_ENABLED
+              value: {{ .Values.config.auth.enabled | quote }}
+            - name: AUTH_SESSION_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "waffles.fullname" . }}
+                  key: session-secret
+
+            # Logging
+            - name: LOGGING_LEVEL
+              value: {{ .Values.config.logging.level | quote }}
+            - name: LOGGING_FORMAT
+              value: {{ .Values.config.logging.format | quote }}
+
+            # Metrics
+            - name: METRICS_ENABLED
+              value: {{ .Values.config.metrics.enabled | quote }}
+            - name: METRICS_PROMETHEUS_PORT
+              value: {{ .Values.config.metrics.prometheusPort | quote }}
+
+            {{- if .Values.config.auth.oauth.enabled }}
+            # OAuth configuration
+            - name: AUTH_OAUTH_ENABLED
+              value: "true"
+            - name: AUTH_OAUTH_ISSUER
+              value: {{ .Values.config.auth.oauth.issuer | quote }}
+            - name: AUTH_OAUTH_CLIENT_ID
+              value: {{ .Values.config.auth.oauth.clientId | quote }}
+            - name: AUTH_OAUTH_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "waffles.fullname" . }}
+                  key: oauth-client-secret
+            - name: AUTH_OAUTH_BASE_URL
+              value: {{ .Values.config.auth.oauth.baseUrl | quote }}
+            {{- end }}
+
+            {{- if .Values.config.auth.ldap.enabled }}
+            # LDAP configuration
+            - name: AUTH_LDAP_ENABLED
+              value: "true"
+            - name: AUTH_LDAP_URL
+              value: {{ .Values.config.auth.ldap.url | quote }}
+            - name: AUTH_LDAP_BASE_DN
+              value: {{ .Values.config.auth.ldap.baseDn | quote }}
+            - name: AUTH_LDAP_BIND_DN
+              value: {{ .Values.config.auth.ldap.bindDn | quote }}
+            - name: AUTH_LDAP_BIND_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "waffles.fullname" . }}
+                  key: ldap-bind-password
+            {{- end }}
+
+            {{- with .Values.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          volumeMounts:
+            - name: config
+              mountPath: /app/configs
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+            {{- with .Values.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "waffles.fullname" . }}
+        - name: tmp
+          emptyDir: {}
+        {{- with .Values.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

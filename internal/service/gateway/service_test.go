@@ -13,8 +13,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/waffles/mcp-gateway/internal/domain"
-	"github.com/waffles/mcp-gateway/pkg/logger"
+	"github.com/waffles/waffles/internal/domain"
+	"github.com/waffles/waffles/pkg/logger"
 )
 
 func TestNewService(t *testing.T) {
@@ -291,7 +291,7 @@ func TestInitializeParams(t *testing.T) {
 		params := InitializeParams{
 			ProtocolVersion: "2025-11-25",
 			ClientInfo: ClientInfo{
-				Name:    "mcp-gateway",
+				Name:    "waffles",
 				Version: "1.0.0",
 			},
 		}
@@ -306,7 +306,7 @@ func TestInitializeParams(t *testing.T) {
 		assert.Equal(t, "2025-11-25", parsed["protocolVersion"])
 
 		clientInfo := parsed["clientInfo"].(map[string]interface{})
-		assert.Equal(t, "mcp-gateway", clientInfo["name"])
+		assert.Equal(t, "waffles", clientInfo["name"])
 		assert.Equal(t, "1.0.0", clientInfo["version"])
 	})
 }

@@ -5,7 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/waffles/mcp-gateway/pkg/logger"
+	"github.com/waffles/waffles/pkg/logger"
 )
 
 // Logger returns a middleware that logs HTTP requests

@@ -127,7 +127,7 @@ Config is loaded from `configs/config.yaml` with environment variable overrides.
 
 ## Import Ordering
 
-Imports follow gci configuration: standard library → third-party → project packages (github.com/waffles/mcp-gateway).
+Imports follow gci configuration: standard library → third-party → project packages (github.com/waffles/waffles).
 
 ## Go Best Practices
 
@@ -192,3 +192,56 @@ Imports follow gci configuration: standard library → third-party → project p
 - Use `v-show` for frequently toggled elements, `v-if` for conditional rendering
 - Add `key` attributes to `v-for` lists
 - Lazy-load routes and heavy components
+
+## Feature Roadmap
+
+See `docs/ROADMAP.md` for the full detailed plan. Summary below:
+
+### Key Decisions
+- **Deployment**: Kubernetes (production-first)
+- **Rate Limiting**: AWS managed services (API Gateway / WAF) - out of app scope
+- **Authentication**: OAuth, LDAP/AD, Local DB (configurable, can enable multiple)
+- **API Keys**: Application-managed with scopes (not AWS API Gateway keys)
+- **MCP Servers**: Internal/self-hosted only
+- **Guardrails**: Input/output validation with policy engine
+
+### Development Tracks
+
+| Track | Focus | Status |
+|-------|-------|--------|
+| A: Security Hardening | HTTP headers, SSRF protection, auth providers | Planned |
+| B: User Management | Admin UI for users, roles, sessions | Planned |
+| C: Observability | Prometheus, Grafana dashboards, alerting | Planned |
+| D: Kubernetes | Helm chart, K8s operator, MCPServer CRD | Planned |
+| E: Server Management | Internal-only validation, container isolation | Planned |
+| F: Least Privilege | Scoped API keys, OAuth enforcement, encryption | Planned |
+| G: Guardrails | Prompt injection, PII redaction, policy engine | Planned |
+
+### Implementation Sprints
+
+| Sprint | Focus | Key Files |
+|--------|-------|-----------|
+| 1 | Security Foundation | `service/auth/ldap.go`, `middleware/security.go`, `deploy/helm/` |
+| 2 | User Management | `handler/admin/users.go`, `service/role/`, `monitoring/` |
+| 3 | Admin UI + Validation | `views/AdminUsers.vue`, `registry/validation.go` |
+| 4 | Server Approval | `handler/admin/servers.go`, `views/AdminServerReview.vue` |
+| 5 | Guardrail Engine | `service/guardrails/engine.go`, `detectors/injection.go` |
+| 6 | Policies + Scopes | `guardrails/policy.go`, `middleware/scope.go` |
+| 7 | K8s Operator | `operator/controllers/`, `handler/clientconfig.go` |
+
+### Security Features
+
+| Attack | Prevention |
+|--------|------------|
+| Brute Force | AWS WAF rate limiting + managed AD lockout |
+| Prompt Injection | Guardrail detector with regex patterns |
+| PII Leakage | Redaction before proxy, output checking |
+| Credential Abuse | Scoped API keys, IP whitelist |
+| Malicious Tools | Tool allowlisting, approval workflow |
+| Resource Exhaustion | Per-user/server/tool quotas |
+
+### New Dependencies (to add)
+```go
+github.com/sony/gobreaker              // Circuit breaker (Phase 2)
+// Note: No Redis needed - rate limiting via AWS managed services
+```

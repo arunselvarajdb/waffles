@@ -12,6 +12,7 @@ repos:
       - id: end-of-file-fixer
       - id: check-yaml
         args: [--unsafe]  # Allow custom tags
+        exclude: '^deploy/helm/.*/templates/'  # Helm templates use Go templating
       - id: check-json
       - id: check-added-large-files
         args: ['--maxkb=1000']
@@ -88,6 +89,7 @@ repos:
     hooks:
       - id: yamllint
         args: ['-c', '.yamllint.yaml']
+        exclude: '^deploy/helm/.*/templates/'  # Helm templates use Go templating
 
   # Markdown linting
   - repo: https://github.com/igorshubovych/markdownlint-cli

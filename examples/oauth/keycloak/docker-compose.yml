@@ -1,10 +1,10 @@
-# Keycloak SSO - Optional Identity Provider for MCP Gateway
+# Keycloak SSO - Optional Identity Provider for Waffles
 #
 # Quick Start:
 #   cd examples/oauth/keycloak
 #   docker-compose up -d
 #
-# Then configure MCP Gateway to use Keycloak (in .env):
+# Then configure Waffles to use Keycloak (in .env):
 #   AUTH_OAUTH_ENABLED=true
 #   AUTH_OAUTH_ISSUER=http://localhost:8180/realms/waffles
 #   AUTH_OAUTH_CLIENT_ID=waffles
@@ -23,7 +23,7 @@ services:
   # Keycloak Postgres Database
   keycloak-db:
     image: postgres:15-alpine
-    container_name: mcp-gateway-keycloak-db
+    container_name: waffles-keycloak-db
     environment:
       POSTGRES_USER: keycloak
       POSTGRES_PASSWORD: keycloak
@@ -40,7 +40,7 @@ services:
 
   keycloak:
     image: quay.io/keycloak/keycloak:24.0
-    container_name: mcp-gateway-keycloak
+    container_name: waffles-keycloak
     environment:
       KEYCLOAK_ADMIN: admin
       KEYCLOAK_ADMIN_PASSWORD: admin

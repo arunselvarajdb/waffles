@@ -18,9 +18,9 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/bcrypt"
 
-	"github.com/waffles/mcp-gateway/internal/domain"
-	"github.com/waffles/mcp-gateway/internal/handler/middleware"
-	"github.com/waffles/mcp-gateway/pkg/logger"
+	"github.com/waffles/waffles/internal/domain"
+	"github.com/waffles/waffles/internal/handler/middleware"
+	"github.com/waffles/waffles/pkg/logger"
 )
 
 func init() {

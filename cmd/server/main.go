@@ -9,11 +9,11 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/waffles/mcp-gateway/internal/config"
-	"github.com/waffles/mcp-gateway/internal/database"
-	"github.com/waffles/mcp-gateway/internal/metrics"
-	"github.com/waffles/mcp-gateway/internal/server"
-	"github.com/waffles/mcp-gateway/pkg/logger"
+	"github.com/waffles/waffles/internal/config"
+	"github.com/waffles/waffles/internal/database"
+	"github.com/waffles/waffles/internal/metrics"
+	"github.com/waffles/waffles/internal/server"
+	"github.com/waffles/waffles/pkg/logger"
 )
 
 var (

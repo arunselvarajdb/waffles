@@ -7,7 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/waffles/mcp-gateway/internal/metrics"
+	"github.com/waffles/waffles/internal/metrics"
 )
 
 // uuidRegex matches UUID v4 format

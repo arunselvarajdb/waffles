@@ -3,8 +3,8 @@ package serveraccess
 import (
 	"context"
 
-	"github.com/waffles/mcp-gateway/internal/domain"
-	"github.com/waffles/mcp-gateway/pkg/logger"
+	"github.com/waffles/waffles/internal/domain"
+	"github.com/waffles/waffles/pkg/logger"
 )
 
 // NamespaceRepository defines the interface for namespace data access.

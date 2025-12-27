@@ -32,7 +32,7 @@ After installation, access the Authentik admin interface (default: http://localh
 2. Go to **Applications** > **Applications** > **Create**
 3. Fill in:
    - **Name**: MCP Gateway
-   - **Slug**: mcp-gateway
+   - **Slug**: waffles
    - **Provider**: Create a new OAuth2/OIDC Provider
 4. Configure the OAuth2 Provider:
    - **Name**: MCP Gateway Provider
@@ -53,7 +53,7 @@ auth:
   oauth:
     enabled: true
     base_url: http://localhost:8080
-    issuer: http://localhost:9000/application/o/mcp-gateway/
+    issuer: http://localhost:9000/application/o/waffles/
     client_id: <your-client-id>
     client_secret: <your-client-secret>
     default_role: viewer
@@ -89,7 +89,7 @@ auth:
 
     # OIDC Issuer URL - provider's .well-known/openid-configuration base
     # Examples:
-    #   Authentik:  https://auth.example.com/application/o/mcp-gateway/
+    #   Authentik:  https://auth.example.com/application/o/waffles/
     #   Keycloak:   https://auth.example.com/realms/myrealm
     #   Okta:       https://mycompany.okta.com/oauth2/default
     #   Auth0:      https://mycompany.auth0.com/
@@ -129,7 +129,7 @@ Create a `.env` file (copy from `.env.example`):
 # .env (do not commit this file)
 AUTH_OAUTH_ENABLED=true
 AUTH_OAUTH_BASE_URL=http://localhost:8080
-AUTH_OAUTH_ISSUER=http://localhost:9000/application/o/mcp-gateway/
+AUTH_OAUTH_ISSUER=http://localhost:9000/application/o/waffles/
 AUTH_OAUTH_CLIENT_ID=your-client-id
 AUTH_OAUTH_CLIENT_SECRET=your-client-secret
 AUTH_OAUTH_DEFAULT_ROLE=viewer

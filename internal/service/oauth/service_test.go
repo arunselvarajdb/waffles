@@ -11,8 +11,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/oauth2"
 
-	"github.com/waffles/mcp-gateway/internal/config"
-	"github.com/waffles/mcp-gateway/pkg/logger"
+	"github.com/waffles/waffles/internal/config"
+	"github.com/waffles/waffles/pkg/logger"
 )
 
 func createMockOIDCServer(t *testing.T) *httptest.Server {

@@ -3,7 +3,7 @@ package fixtures
 import (
 	"time"
 
-	"github.com/waffles/mcp-gateway/internal/config"
+	"github.com/waffles/waffles/internal/config"
 )
 
 // DefaultTestConfig returns a default test configuration
@@ -43,7 +43,7 @@ func DefaultTestConfig() *config.Config {
 			Provider: "env",
 			AWS: config.AWSSecretsConfig{
 				Region:       "us-east-1",
-				SecretPrefix: "test/mcp-gateway",
+				SecretPrefix: "test/waffles",
 			},
 		},
 		Logging: config.LoggingConfig{

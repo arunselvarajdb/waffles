@@ -1,0 +1,250 @@
+# Default values for waffles.
+# This is a YAML-formatted file.
+
+# Number of replicas for the waffles deployment
+replicaCount: 1
+
+image:
+  repository: waffles
+  pullPolicy: IfNotPresent
+  # Overrides the image tag whose default is the chart appVersion.
+  tag: ""
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: true
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: ""
+
+podAnnotations: {}
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 65532
+  runAsGroup: 65532
+  fsGroup: 65532
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 65532
+  capabilities:
+    drop:
+      - ALL
+  seccompProfile:
+    type: RuntimeDefault
+
+service:
+  type: ClusterIP
+  port: 8080
+  # Port for Prometheus metrics
+  metricsPort: 9090
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+    # kubernetes.io/ingress.class: nginx
+    # kubernetes.io/tls-acme: "true"
+    # cert-manager.io/cluster-issuer: letsencrypt-prod
+  hosts:
+    - host: waffles.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+  #  - secretName: waffles-tls
+  #    hosts:
+  #      - waffles.local
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 256Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 80
+  targetMemoryUtilizationPercentage: 80
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
+
+# MCP Gateway configuration
+config:
+  server:
+    port: 8080
+    environment: production
+    readTimeout: 30s
+    writeTimeout: 30s
+    shutdownTimeout: 10s
+
+  logging:
+    level: info
+    format: json
+
+  metrics:
+    enabled: true
+    prometheusPort: 9090
+
+  # Authentication configuration
+  auth:
+    enabled: true
+    sessionSecret: ""  # Required: set via secret or values
+    sessionMaxAge: 24h
+    cookieSecure: true
+    cookieSameSite: strict
+
+    # MCP client authentication methods
+    mcpAuth:
+      apiKey: true
+      session: true
+      oauth: true
+
+    # OAuth/OIDC configuration (optional)
+    oauth:
+      enabled: false
+      issuer: ""
+      clientId: ""
+      clientSecret: ""
+      baseUrl: ""
+      defaultRole: viewer
+      autoCreateUsers: true
+
+    # LDAP/AD configuration (optional)
+    ldap:
+      enabled: false
+      url: ""
+      baseDn: ""
+      bindDn: ""
+      bindPassword: ""
+      userFilter: "(sAMAccountName={username})"
+      groupMappings: {}
+      defaultRole: viewer
+      tls:
+        insecureSkipVerify: false
+        minVersion: "1.2"
+
+    # Local database authentication
+    local:
+      enabled: true
+      lockout:
+        maxAttempts: 5
+        duration: 15m
+      passwordPolicy:
+        minLength: 12
+        requireUppercase: true
+        requireLowercase: true
+        requireNumber: true
+        requireSpecial: true
+
+  # Database configuration
+  database:
+    host: ""  # Set by postgresql subchart or external
+    port: 5432
+    user: mcpgateway
+    password: ""  # Required: set via secret
+    database: mcpgateway
+    maxOpenConns: 25
+    maxIdleConns: 5
+    connMaxLifetime: 5m
+
+# PostgreSQL subchart configuration
+# Set postgresql.enabled=false to use an external database
+postgresql:
+  enabled: true
+  auth:
+    username: mcpgateway
+    password: ""  # Set this or use existingSecret
+    database: mcpgateway
+    # existingSecret: ""
+    # secretKeys:
+    #   adminPasswordKey: postgres-password
+    #   userPasswordKey: password
+  primary:
+    persistence:
+      enabled: true
+      size: 8Gi
+    resources:
+      limits:
+        cpu: 500m
+        memory: 512Mi
+      requests:
+        cpu: 100m
+        memory: 256Mi
+
+# External database configuration (when postgresql.enabled=false)
+externalDatabase:
+  host: ""
+  port: 5432
+  user: mcpgateway
+  password: ""
+  database: mcpgateway
+  existingSecret: ""
+  existingSecretPasswordKey: password
+
+# Prometheus ServiceMonitor (requires Prometheus Operator)
+serviceMonitor:
+  enabled: false
+  interval: 30s
+  scrapeTimeout: 10s
+  labels: {}
+  annotations: {}
+
+# Pod Disruption Budget
+podDisruptionBudget:
+  enabled: false
+  minAvailable: 1
+  # maxUnavailable: 1
+
+# Health check configuration
+livenessProbe:
+  httpGet:
+    path: /health
+    port: http
+  initialDelaySeconds: 10
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /ready
+    port: http
+  initialDelaySeconds: 5
+  periodSeconds: 5
+  timeoutSeconds: 3
+  failureThreshold: 3
+
+# Extra environment variables
+extraEnv: []
+  # - name: MY_VAR
+  #   value: "my-value"
+  # - name: MY_SECRET
+  #   valueFrom:
+  #     secretKeyRef:
+  #       name: my-secret
+  #       key: password
+
+# Extra volumes and volume mounts
+extraVolumes: []
+extraVolumeMounts: []
+
+# Init containers (e.g., for database migrations)
+initContainers: []

@@ -1,15 +1,15 @@
-# MCP Gateway Platform
+# Waffles
 
-[![CI](https://github.com/waffles/mcp-gateway/actions/workflows/ci.yml/badge.svg)](https://github.com/waffles/mcp-gateway/actions/workflows/ci.yml)
-[![Go Report Card](https://goreportcard.com/badge/github.com/waffles/mcp-gateway)](https://goreportcard.com/report/github.com/waffles/mcp-gateway)
-[![codecov](https://codecov.io/gh/waffles/mcp-gateway/branch/main/graph/badge.svg)](https://codecov.io/gh/waffles/mcp-gateway)
+[![CI](https://github.com/waffles/waffles/actions/workflows/ci.yml/badge.svg)](https://github.com/waffles/waffles/actions/workflows/ci.yml)
+[![Go Report Card](https://goreportcard.com/badge/github.com/waffles/waffles)](https://goreportcard.com/report/github.com/waffles/waffles)
+[![codecov](https://codecov.io/gh/waffles/waffles/branch/main/graph/badge.svg)](https://codecov.io/gh/waffles/waffles)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 Production-ready MCP (Model Context Protocol) gateway platform built with Go, featuring comprehensive security, observability, and DevOps best practices.
 
 ## Overview
 
-MCP Gateway is a centralized proxy and management platform for MCP servers, providing:
+Waffles is a centralized proxy and management platform for MCP servers, providing:
 
 - **Centralized Gateway**: Proxy MCP protocol requests with circuit breakers, retries, and connection pooling
 - **Server Registry**: Catalog and discovery of MCP servers with health monitoring
@@ -88,8 +88,8 @@ MCP Gateway is a centralized proxy and management platform for MCP servers, prov
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/waffles/mcp-gateway.git
-   cd mcp-gateway
+   git clone https://github.com/waffles/waffles.git
+   cd waffles
    ```
 
 2. **Start all services with Docker Compose** (Recommended)
@@ -106,7 +106,7 @@ MCP Gateway is a centralized proxy and management platform for MCP servers, prov
 3. **Verify it's running**
    ```bash
    curl http://localhost:8080/health
-   # Expected: {"service":"mcp-gateway","status":"healthy"}
+   # Expected: {"service":"waffles","status":"healthy"}
 
    curl http://localhost:8080/ready
    # Expected: {"status":"ready","checks":{"database":{"healthy":true...}}}
@@ -129,7 +129,7 @@ If you prefer to run the gateway locally:
 ```bash
 # 1. Start PostgreSQL
 docker run -d \
-  --name mcp-gateway-postgres \
+  --name waffles-postgres \
   -e POSTGRES_PASSWORD=postgres \
   -e POSTGRES_DB=mcp_gateway \
   -p 5432:5432 \
@@ -276,7 +276,7 @@ See [TEST_GUIDE.md](test/TEST_GUIDE.md) for comprehensive testing guide.
 ### Project Structure
 
 ```
-mcp-gateway/
+waffles/
 ├── cmd/
 │   ├── server/          # API server entry point
 │   └── migrate/         # Database migration tool
@@ -507,8 +507,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Support
 
-- **Issues**: [GitHub Issues](https://github.com/waffles/mcp-gateway/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/waffles/mcp-gateway/discussions)
+- **Issues**: [GitHub Issues](https://github.com/waffles/waffles/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/waffles/waffles/discussions)
 - **Documentation**: [docs/](docs/)
 
 ## Status

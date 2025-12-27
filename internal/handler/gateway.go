@@ -14,11 +14,11 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/waffles/mcp-gateway/internal/domain"
-	"github.com/waffles/mcp-gateway/internal/handler/middleware"
-	"github.com/waffles/mcp-gateway/internal/service/gateway"
-	"github.com/waffles/mcp-gateway/internal/service/serveraccess"
-	"github.com/waffles/mcp-gateway/pkg/logger"
+	"github.com/waffles/waffles/internal/domain"
+	"github.com/waffles/waffles/internal/handler/middleware"
+	"github.com/waffles/waffles/internal/service/gateway"
+	"github.com/waffles/waffles/internal/service/serveraccess"
+	"github.com/waffles/waffles/pkg/logger"
 )
 
 // MCPRequest represents a JSON-RPC request

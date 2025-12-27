@@ -6,9 +6,9 @@ import (
 	"net/http/httputil"
 	"time"
 
-	"github.com/waffles/mcp-gateway/internal/domain"
-	"github.com/waffles/mcp-gateway/internal/service/oauth"
-	"github.com/waffles/mcp-gateway/internal/service/registry"
+	"github.com/waffles/waffles/internal/domain"
+	"github.com/waffles/waffles/internal/service/oauth"
+	"github.com/waffles/waffles/internal/service/registry"
 )
 
 // RegistryServiceInterface defines the interface for registry service operations.

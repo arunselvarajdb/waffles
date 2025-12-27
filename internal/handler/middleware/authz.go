@@ -7,7 +7,7 @@ import (
 	"github.com/casbin/casbin/v2"
 	"github.com/gin-gonic/gin"
 
-	"github.com/waffles/mcp-gateway/pkg/logger"
+	"github.com/waffles/waffles/pkg/logger"
 )
 
 // AuthzConfig contains configuration for authorization middleware

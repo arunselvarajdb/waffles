@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/waffles/mcp-gateway/pkg/logger"
+	"github.com/waffles/waffles/pkg/logger"
 )
 
 func TestNewServer(t *testing.T) {
