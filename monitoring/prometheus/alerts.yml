@@ -1,0 +1,56 @@
+groups:
+  - name: waffles
+    rules:
+      - alert: HighErrorRate
+        expr: rate(http_requests_total{status=~"5.."}[5m]) / rate(http_requests_total[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High error rate detected"
+          description: "Error rate is {{ $value | humanizePercentage }} over the last 5 minutes"
+
+      - alert: ServerUnhealthy
+        expr: gateway_server_health_status == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "MCP server is unhealthy"
+          description: "Server {{ $labels.server_name }} ({{ $labels.server_id }}) is unhealthy"
+
+      - alert: HighLatency
+        expr: histogram_quantile(0.99, rate(http_request_duration_seconds_bucket[5m])) > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High request latency"
+          description: "P99 latency is {{ $value | humanizeDuration }}"
+
+      - alert: DatabaseConnectionPoolExhausted
+        expr: db_connections_in_use / db_connections_open > 0.9
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Database connection pool nearly exhausted"
+          description: "{{ $value | humanizePercentage }} of database connections are in use"
+
+      - alert: NoActiveServers
+        expr: sum(registry_servers_total{status="active"}) == 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "No active MCP servers"
+          description: "There are no active MCP servers registered"
+
+      - alert: GatewayRequestsInFlight
+        expr: sum(gateway_requests_in_flight) > 100
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High number of in-flight gateway requests"
+          description: "{{ $value }} gateway requests currently in flight"

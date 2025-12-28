@@ -1,8 +1,8 @@
 # Waffles
 
-[![CI](https://github.com/waffles/waffles/actions/workflows/ci.yml/badge.svg)](https://github.com/waffles/waffles/actions/workflows/ci.yml)
-[![Go Report Card](https://goreportcard.com/badge/github.com/waffles/waffles)](https://goreportcard.com/report/github.com/waffles/waffles)
-[![codecov](https://codecov.io/gh/waffles/waffles/branch/main/graph/badge.svg)](https://codecov.io/gh/waffles/waffles)
+[![CI](https://github.com/arunselvarajdb/waffles/actions/workflows/ci.yml/badge.svg)](https://github.com/arunselvarajdb/waffles/actions/workflows/ci.yml)
+[![Go Report Card](https://goreportcard.com/badge/github.com/arunselvarajdb/waffles)](https://goreportcard.com/report/github.com/arunselvarajdb/waffles)
+[![codecov](https://codecov.io/gh/arunselvarajdb/waffles/branch/main/graph/badge.svg)](https://app.codecov.io/github/arunselvarajdb/waffles)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 Production-ready MCP (Model Context Protocol) gateway platform built with Go, featuring comprehensive security, observability, and DevOps best practices.

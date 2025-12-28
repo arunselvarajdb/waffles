@@ -12,6 +12,7 @@ import (
 	"github.com/waffles/waffles/internal/config"
 	"github.com/waffles/waffles/internal/database"
 	"github.com/waffles/waffles/internal/metrics"
+	"github.com/waffles/waffles/internal/repository"
 	"github.com/waffles/waffles/internal/server"
 	"github.com/waffles/waffles/pkg/logger"
 )
@@ -107,6 +108,32 @@ func main() {
 			}
 		}()
 		log.Info().Msg("Database stats collector started")
+
+		// Start Server Health collector (collects every 30 seconds)
+		serverRepo := repository.NewServerRepository(db.Pool, log)
+		healthProvider := metrics.NewHealthProviderAdapter(serverRepo)
+		healthCollector := metrics.NewServerHealthCollector(metricsRegistry, healthProvider)
+		go func() {
+			ticker := time.NewTicker(30 * time.Second)
+			defer ticker.Stop()
+
+			// Collect immediately on startup
+			if err := healthCollector.Collect(ctx); err != nil {
+				log.Warn().Err(err).Msg("Initial server health collection failed")
+			}
+
+			for {
+				select {
+				case <-ticker.C:
+					if err := healthCollector.Collect(ctx); err != nil {
+						log.Warn().Err(err).Msg("Server health collection failed")
+					}
+				case <-ctx.Done():
+					return
+				}
+			}
+		}()
+		log.Info().Msg("Server health collector started")
 	}
 
 	// Listen for interrupt signals

@@ -10,6 +10,11 @@ func NewNopLogger() Logger {
 	return &NopLogger{}
 }
 
+// NewNop is an alias for NewNopLogger for convenience in tests
+func NewNop() Logger {
+	return &NopLogger{}
+}
+
 func (n *NopLogger) Debug() Event                           { return &NopEvent{} }
 func (n *NopLogger) Info() Event                            { return &NopEvent{} }
 func (n *NopLogger) Warn() Event                            { return &NopEvent{} }
