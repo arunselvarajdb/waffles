@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/waffles/mcp-gateway/internal/config"
-	"github.com/waffles/mcp-gateway/internal/database"
-	"github.com/waffles/mcp-gateway/pkg/logger"
+	"github.com/waffles/waffles/internal/config"
+	"github.com/waffles/waffles/internal/database"
+	"github.com/waffles/waffles/pkg/logger"
 )
 
 var (

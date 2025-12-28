@@ -1,7 +1,7 @@
 {
-  "name": "mcp-gateway-e2e-tests",
+  "name": "waffles-e2e-tests",
   "version": "1.0.0",
-  "description": "E2E tests for MCP Gateway",
+  "description": "E2E tests for Waffles",
   "scripts": {
     "test": "playwright test",
     "test:ui": "playwright test --ui",

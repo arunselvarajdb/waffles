@@ -1,4 +1,4 @@
-# How to Test the MCP Gateway Setup
+# How to Test the Waffles Setup
 
 ## Quick Start
 
@@ -100,7 +100,7 @@ package main
 
 import (
     "context"
-    "github.com/waffles/mcp-gateway/pkg/logger"
+    "github.com/waffles/waffles/pkg/logger"
 )
 
 func main() {
@@ -143,7 +143,7 @@ Expected output (JSON):
 **Build for current platform:**
 ```bash
 make build
-./bin/mcp-gateway -h
+./bin/waffles -h
 ```
 Expected: Binary runs, shows help
 
@@ -157,7 +157,7 @@ Expected: 4 binaries created (darwin/linux, amd64/arm64)
 **Build for Docker:**
 ```bash
 make build-linux
-ls -lh bin/mcp-gateway-linux-amd64
+ls -lh bin/waffles-linux-amd64
 ```
 
 ### 6. Test Code Quality
@@ -200,12 +200,12 @@ xxx            redis:7-alpine         Up             0.0.0.0:6379->6379/tcp
 
 **Test Postgres connection:**
 ```bash
-docker exec -it mcp-gateway-postgres psql -U postgres -c "SELECT version();"
+docker exec -it waffles-postgres psql -U postgres -c "SELECT version();"
 ```
 
 **Test Redis connection:**
 ```bash
-docker exec -it mcp-gateway-redis redis-cli ping
+docker exec -it waffles-redis redis-cli ping
 ```
 Expected: PONG
 
@@ -228,7 +228,7 @@ make test
 make build
 
 # 4. Run application
-./bin/mcp-gateway
+./bin/waffles
 
 # Expected output:
 # {"level":"info","version":"dev","environment":"development","message":"Starting MCP Gateway"}
@@ -280,8 +280,8 @@ docker ps
 
 **View container logs:**
 ```bash
-docker logs mcp-gateway-postgres
-docker logs mcp-gateway-redis
+docker logs waffles-postgres
+docker logs waffles-redis
 ```
 
 **Reset containers:**

@@ -1,12 +1,20 @@
-.PHONY: help install-tools dev-up dev-down migrate-up migrate-down migrate-create seed run test test-unit test-integration test-e2e test-e2e-ui test-e2e-headed check-node test-frontend test-frontend-coverage test-all lint fmt generate build build-linux build-all build-frontend docker-build docker-push clean clean-all pre-commit security-scan
+.PHONY: help install-tools dev-up dev-down dev-up-sso migrate-up migrate-down migrate-create seed run run-sso run-frontend test test-unit test-integration test-e2e test-e2e-ui test-e2e-headed check-node test-frontend test-frontend-coverage test-all lint fmt generate build build-linux build-all build-frontend docker-build docker-push clean clean-all pre-commit security-scan
 
 # Variables
-APP_NAME=mcp-gateway
+APP_NAME=waffles
 DOCKER_IMAGE=ghcr.io/waffles/$(APP_NAME)
 DOCKER_TAG?=latest
 GO_VERSION=1.22
 NODE_MIN_VERSION=18
 NPM_MIN_VERSION=9
+
+# SSO/OAuth Configuration (override these for your provider)
+# Example: make run-sso SSO_ISSUER=https://auth.example.com SSO_CLIENT_ID=my-client
+SSO_ENABLED?=true
+SSO_ISSUER?=http://localhost:8180/realms/waffles
+SSO_CLIENT_ID?=waffles
+SSO_CLIENT_SECRET?=change-me
+SSO_BASE_URL?=http://localhost:8080
 
 # Detect local OS and architecture
 GOOS?=$(shell go env GOOS)
@@ -21,18 +29,21 @@ COLOR_BLUE=\033[34m
 
 ## help: Display this help message
 help:
-	@echo "$(COLOR_BOLD)MCP Gateway - Development Commands$(COLOR_RESET)"
+	@echo "$(COLOR_BOLD)Waffles - Development Commands$(COLOR_RESET)"
 	@echo ""
 	@echo "$(COLOR_GREEN)Setup:$(COLOR_RESET)"
 	@echo "  make install-tools    - Install development tools (golangci-lint, migrate, etc.)"
 	@echo ""
 	@echo "$(COLOR_GREEN)Development:$(COLOR_RESET)"
 	@echo "  make dev-up           - Start Docker Compose stack (Gateway, Postgres, Mock)"
+	@echo "  make dev-up-sso       - Start Docker Compose stack with Keycloak SSO"
 	@echo "  make dev-down         - Stop Docker Compose stack"
 	@echo "  make docker-test      - Run E2E tests with Docker Compose"
 	@echo "  make docker-logs      - Show logs from all services"
 	@echo "  make docker-rebuild   - Rebuild and restart all services"
-	@echo "  make run              - Run server locally"
+	@echo "  make run              - Run backend server locally"
+	@echo "  make run-sso          - Run backend with SSO enabled (uses SSO_* vars)"
+	@echo "  make run-frontend     - Run frontend dev server (Vite)"
 	@echo "  make seed             - Seed test data"
 	@echo ""
 	@echo "$(COLOR_GREEN)Database:$(COLOR_RESET)"
@@ -85,6 +96,19 @@ dev-up:
 	@echo "  Gateway:     localhost:8080"
 	@echo "  Postgres:    localhost:5432"
 	@echo "  Mock Server: localhost:9001"
+
+## dev-up-sso: Start Docker Compose stack with Keycloak for SSO
+dev-up-sso:
+	@echo "$(COLOR_BLUE)Starting development stack with SSO (Keycloak)...$(COLOR_RESET)"
+	docker-compose --profile sso up -d
+	@echo "$(COLOR_GREEN)✓ Development stack with SSO running$(COLOR_RESET)"
+	@echo "  Gateway:     localhost:8080"
+	@echo "  Keycloak:    localhost:8180 (admin/admin)"
+	@echo "  Postgres:    localhost:5432"
+	@echo "  Mock Server: localhost:9001"
+	@echo ""
+	@echo "$(COLOR_BLUE)To run gateway with SSO:$(COLOR_RESET)"
+	@echo "  make run-sso SSO_CLIENT_SECRET=<your-client-secret>"
 
 ## dev-down: Stop Docker Compose development stack
 dev-down:
@@ -146,8 +170,24 @@ seed:
 
 ## run: Run server locally
 run:
-	@echo "$(COLOR_BLUE)Starting server...$(COLOR_RESET)"
+	@echo "$(COLOR_BLUE)Starting backend server...$(COLOR_RESET)"
 	@go run cmd/server/main.go
+
+## run-sso: Run server locally with SSO/OAuth enabled
+run-sso:
+	@echo "$(COLOR_BLUE)Starting backend server with SSO enabled...$(COLOR_RESET)"
+	@echo "SSO Config: $(SSO_ISSUER)"
+	AUTH_OAUTH_ENABLED=$(SSO_ENABLED) \
+	AUTH_OAUTH_ISSUER=$(SSO_ISSUER) \
+	AUTH_OAUTH_CLIENT_ID=$(SSO_CLIENT_ID) \
+	AUTH_OAUTH_CLIENT_SECRET=$(SSO_CLIENT_SECRET) \
+	AUTH_OAUTH_BASE_URL=$(SSO_BASE_URL) \
+	go run cmd/server/main.go
+
+## run-frontend: Run frontend development server
+run-frontend: check-node
+	@echo "$(COLOR_BLUE)Starting frontend dev server...$(COLOR_RESET)"
+	@cd web-app && npm install && npm run dev
 
 ## test: Run all tests
 test:

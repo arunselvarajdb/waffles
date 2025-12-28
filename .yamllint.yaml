@@ -10,6 +10,7 @@ rules:
     allowed-values: ['true', 'false', 'yes', 'no', 'on', 'off']
   comments:
     min-spaces-from-content: 1
+  comments-indentation: disable  # Allow documented examples with different indentation
   indentation:
     spaces: 2
     indent-sequences: consistent

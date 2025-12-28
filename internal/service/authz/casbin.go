@@ -8,7 +8,7 @@ import (
 	"github.com/casbin/casbin/v2/model"
 	fileadapter "github.com/casbin/casbin/v2/persist/file-adapter"
 
-	"github.com/waffles/mcp-gateway/pkg/logger"
+	"github.com/waffles/waffles/pkg/logger"
 )
 
 // CasbinService wraps the Casbin enforcer with additional functionality

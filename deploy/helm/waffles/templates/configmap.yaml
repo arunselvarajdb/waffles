@@ -1,0 +1,83 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "waffles.fullname" . }}
+  labels:
+    {{- include "waffles.labels" . | nindent 4 }}
+data:
+  config.yaml: |
+    server:
+      port: {{ .Values.config.server.port }}
+      environment: {{ .Values.config.server.environment }}
+      read_timeout: {{ .Values.config.server.readTimeout }}
+      write_timeout: {{ .Values.config.server.writeTimeout }}
+      shutdown_timeout: {{ .Values.config.server.shutdownTimeout }}
+
+    database:
+      host: {{ include "waffles.databaseHost" . }}
+      port: {{ include "waffles.databasePort" . }}
+      user: {{ include "waffles.databaseUser" . }}
+      database: {{ include "waffles.databaseName" . }}
+      max_open_conns: {{ .Values.config.database.maxOpenConns }}
+      max_idle_conns: {{ .Values.config.database.maxIdleConns }}
+      conn_max_lifetime: {{ .Values.config.database.connMaxLifetime }}
+
+    logging:
+      level: {{ .Values.config.logging.level }}
+      format: {{ .Values.config.logging.format }}
+
+    metrics:
+      enabled: {{ .Values.config.metrics.enabled }}
+      prometheus_port: {{ .Values.config.metrics.prometheusPort }}
+
+    auth:
+      enabled: {{ .Values.config.auth.enabled }}
+      session_max_age: {{ .Values.config.auth.sessionMaxAge }}
+      cookie_secure: {{ .Values.config.auth.cookieSecure }}
+      cookie_same_site: {{ .Values.config.auth.cookieSameSite }}
+
+      mcp_auth:
+        api_key: {{ .Values.config.auth.mcpAuth.apiKey }}
+        session: {{ .Values.config.auth.mcpAuth.session }}
+        oauth: {{ .Values.config.auth.mcpAuth.oauth }}
+
+      {{- if .Values.config.auth.oauth.enabled }}
+      oauth:
+        enabled: true
+        issuer: {{ .Values.config.auth.oauth.issuer }}
+        client_id: {{ .Values.config.auth.oauth.clientId }}
+        base_url: {{ .Values.config.auth.oauth.baseUrl }}
+        default_role: {{ .Values.config.auth.oauth.defaultRole }}
+        auto_create_users: {{ .Values.config.auth.oauth.autoCreateUsers }}
+      {{- end }}
+
+      {{- if .Values.config.auth.ldap.enabled }}
+      ldap:
+        enabled: true
+        url: {{ .Values.config.auth.ldap.url }}
+        base_dn: {{ .Values.config.auth.ldap.baseDn }}
+        bind_dn: {{ .Values.config.auth.ldap.bindDn }}
+        user_filter: {{ .Values.config.auth.ldap.userFilter | quote }}
+        default_role: {{ .Values.config.auth.ldap.defaultRole }}
+        {{- if .Values.config.auth.ldap.groupMappings }}
+        group_mappings:
+          {{- range $key, $value := .Values.config.auth.ldap.groupMappings }}
+          {{ $key | quote }}: {{ $value | quote }}
+          {{- end }}
+        {{- end }}
+        tls:
+          insecure_skip_verify: {{ .Values.config.auth.ldap.tls.insecureSkipVerify }}
+          min_version: {{ .Values.config.auth.ldap.tls.minVersion | quote }}
+      {{- end }}
+
+      local:
+        enabled: {{ .Values.config.auth.local.enabled }}
+        lockout:
+          max_attempts: {{ .Values.config.auth.local.lockout.maxAttempts }}
+          duration: {{ .Values.config.auth.local.lockout.duration }}
+        password_policy:
+          min_length: {{ .Values.config.auth.local.passwordPolicy.minLength }}
+          require_uppercase: {{ .Values.config.auth.local.passwordPolicy.requireUppercase }}
+          require_lowercase: {{ .Values.config.auth.local.passwordPolicy.requireLowercase }}
+          require_number: {{ .Values.config.auth.local.passwordPolicy.requireNumber }}
+          require_special: {{ .Values.config.auth.local.passwordPolicy.requireSpecial }}

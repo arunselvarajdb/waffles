@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/waffles/mcp-gateway/internal/domain"
+	"github.com/waffles/waffles/internal/domain"
 )
 
 // Note: These tests require a running PostgreSQL database

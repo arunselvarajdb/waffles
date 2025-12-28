@@ -13,8 +13,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/waffles/mcp-gateway/internal/domain"
-	"github.com/waffles/mcp-gateway/pkg/logger"
+	"github.com/waffles/waffles/internal/domain"
+	"github.com/waffles/waffles/pkg/logger"
 )
 
 const (
@@ -78,7 +78,7 @@ func (c *StreamableHTTPClient) Initialize(ctx context.Context, server *domain.MC
 	params := InitializeParams{
 		ProtocolVersion: MCPProtocolVersion,
 		ClientInfo: ClientInfo{
-			Name:    "mcp-gateway",
+			Name:    "waffles",
 			Version: "1.0.0",
 		},
 	}

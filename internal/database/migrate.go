@@ -9,7 +9,7 @@ import (
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
 	"github.com/golang-migrate/migrate/v4/source/iofs"
 
-	"github.com/waffles/mcp-gateway/pkg/logger"
+	"github.com/waffles/waffles/pkg/logger"
 )
 
 //go:embed migrations/*.sql

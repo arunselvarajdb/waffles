@@ -3,7 +3,7 @@ package middleware
 import (
 	"context"
 
-	"github.com/waffles/mcp-gateway/internal/service/oauth"
+	"github.com/waffles/waffles/internal/service/oauth"
 )
 
 // OAuthServiceAdapter adapts oauth.Service to the OAuthValidator interface

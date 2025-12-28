@@ -8,8 +8,8 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/waffles/mcp-gateway/internal/config"
-	"github.com/waffles/mcp-gateway/pkg/logger"
+	"github.com/waffles/waffles/internal/config"
+	"github.com/waffles/waffles/pkg/logger"
 )
 
 // DB wraps the pgxpool.Pool

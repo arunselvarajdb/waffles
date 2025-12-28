@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/waffles/mcp-gateway/internal/domain"
-	"github.com/waffles/mcp-gateway/internal/repository"
-	"github.com/waffles/mcp-gateway/pkg/logger"
+	"github.com/waffles/waffles/internal/domain"
+	"github.com/waffles/waffles/internal/repository"
+	"github.com/waffles/waffles/pkg/logger"
 )
 
 // Service handles MCP server registry business logic
@@ -402,7 +402,7 @@ func (s *Service) testStreamableHTTPTransport(ctx context.Context, baseURL strin
 				},
 			},
 			"clientInfo": map[string]string{
-				"name":    "mcp-gateway",
+				"name":    "waffles",
 				"version": "1.0.0",
 			},
 		},
@@ -596,7 +596,7 @@ func (s *Service) callToolStreamableHTTP(ctx context.Context, req *CallToolReque
 				},
 			},
 			"clientInfo": map[string]string{
-				"name":    "mcp-gateway-inspector",
+				"name":    "waffles-inspector",
 				"version": "1.0.0",
 			},
 		},
@@ -841,7 +841,7 @@ func (s *Service) testSSETransport(ctx context.Context, baseURL string) *TestCon
 			"protocolVersion": "2024-11-05",
 			"capabilities":    map[string]interface{}{},
 			"clientInfo": map[string]string{
-				"name":    "mcp-gateway",
+				"name":    "waffles",
 				"version": "1.0.0",
 			},
 		},

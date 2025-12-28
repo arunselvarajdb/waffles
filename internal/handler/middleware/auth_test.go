@@ -3,6 +3,7 @@ package middleware
 import (
 	"bytes"
 	"context"
+	"errors"
 	"net/http/httptest"
 	"testing"
 
@@ -12,8 +13,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/waffles/mcp-gateway/internal/metrics"
-	"github.com/waffles/mcp-gateway/pkg/logger"
+	"github.com/waffles/waffles/internal/domain"
+	"github.com/waffles/waffles/internal/metrics"
+	"github.com/waffles/waffles/internal/repository"
+	"github.com/waffles/waffles/pkg/logger"
 )
 
 func init() {
@@ -458,15 +461,30 @@ func TestSendUnauthorizedWithWWWAuthenticate(t *testing.T) {
 
 // mockOAuthValidator implements OAuthValidator interface for testing.
 type mockOAuthValidator struct {
-	baseURL string
-	enabled bool
+	baseURL        string
+	enabled        bool
+	validateErr    error
+	userInfo       *OAuthUserInfo
+	autoCreate     bool
+	defaultRole    string
+	validateCalled bool
+	validateToken  string
 }
 
 func (m *mockOAuthValidator) ValidateBearerToken(ctx context.Context, token string) (*OAuthUserInfo, error) {
+	m.validateCalled = true
+	m.validateToken = token
+	if m.validateErr != nil {
+		return nil, m.validateErr
+	}
+	if m.userInfo != nil {
+		return m.userInfo, nil
+	}
 	return &OAuthUserInfo{
-		ID:    "user-123",
-		Email: "test@example.com",
-		Name:  "Test User",
+		ID:       "user-123",
+		Email:    "test@example.com",
+		Name:     "Test User",
+		Provider: "keycloak",
 	}, nil
 }
 
@@ -483,11 +501,90 @@ func (m *mockOAuthValidator) GetBaseURL() string {
 }
 
 func (m *mockOAuthValidator) GetDefaultRole() string {
+	if m.defaultRole != "" {
+		return m.defaultRole
+	}
 	return "user"
 }
 
 func (m *mockOAuthValidator) AutoCreateUsers() bool {
-	return true
+	return m.autoCreate
+}
+
+// mockAPIKeyRepo implements APIKeyRepoInterface for testing.
+type mockAPIKeyRepo struct {
+	key          *repository.APIKey
+	getErr       error
+	updateErr    error
+	getCalled    bool
+	updateCalled bool
+	lastKeyHash  string
+	lastKeyID    string
+}
+
+func (m *mockAPIKeyRepo) GetByHash(ctx context.Context, keyHash string) (*repository.APIKey, error) {
+	m.getCalled = true
+	m.lastKeyHash = keyHash
+	if m.getErr != nil {
+		return nil, m.getErr
+	}
+	return m.key, nil
+}
+
+func (m *mockAPIKeyRepo) UpdateLastUsed(ctx context.Context, keyID string) error {
+	m.updateCalled = true
+	m.lastKeyID = keyID
+	return m.updateErr
+}
+
+// mockUserRepo implements UserRepoInterface for testing.
+type mockUserRepo struct {
+	user               *domain.User
+	roles              []string
+	getErr             error
+	rolesErr           error
+	findOrCreateUser   *domain.User
+	findOrCreateNew    bool
+	findOrCreateErr    error
+	assignErr          error
+	getCalled          bool
+	rolesCalled        bool
+	findOrCreateCalled bool
+	assignCalled       bool
+	lastUserID         string
+	lastRole           string
+}
+
+func (m *mockUserRepo) GetByID(ctx context.Context, id string) (*domain.User, error) {
+	m.getCalled = true
+	m.lastUserID = id
+	if m.getErr != nil {
+		return nil, m.getErr
+	}
+	return m.user, nil
+}
+
+func (m *mockUserRepo) GetUserRoles(ctx context.Context, userID string) ([]string, error) {
+	m.rolesCalled = true
+	if m.rolesErr != nil {
+		return nil, m.rolesErr
+	}
+	return m.roles, nil
+}
+
+func (m *mockUserRepo) FindOrCreateOAuthUser(ctx context.Context, provider, externalID, email, name string) (*domain.User, bool, error) {
+	m.findOrCreateCalled = true
+	if m.findOrCreateErr != nil {
+		return nil, false, m.findOrCreateErr
+	}
+	return m.findOrCreateUser, m.findOrCreateNew, nil
+}
+
+func (m *mockUserRepo) AssignRole(ctx context.Context, userID, role string) error {
+	m.assignCalled = true
+	m.lastUserID = userID
+	m.lastRole = role
+	return m.assignErr
 }
 
 // Tests for SessionAuth middleware.
@@ -931,5 +1028,858 @@ func TestRequirePermission_NoRoles(t *testing.T) {
 		router.ServeHTTP(w, req)
 
 		assert.Equal(t, 403, w.Code)
+	})
+}
+
+// Tests for APIKeyAuth middleware.
+func TestAPIKeyAuth(t *testing.T) {
+	t.Run("returns 401 when no API key provided", func(t *testing.T) {
+		mockAPIKey := &mockAPIKeyRepo{}
+		mockUser := &mockUserRepo{}
+
+		cfg := &AuthConfig{
+			Logger:     logger.NewNopLogger(),
+			APIKeyRepo: mockAPIKey,
+			UserRepo:   mockUser,
+		}
+
+		w := httptest.NewRecorder()
+		router := gin.New()
+		router.Use(APIKeyAuth(cfg))
+		router.GET("/protected", func(c *gin.Context) {
+			c.JSON(200, gin.H{"ok": true})
+		})
+
+		req := httptest.NewRequest("GET", "/protected", nil)
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, 401, w.Code)
+		assert.Contains(t, w.Body.String(), "API key required")
+	})
+
+	t.Run("returns 401 when API key is invalid", func(t *testing.T) {
+		mockAPIKey := &mockAPIKeyRepo{
+			getErr: errors.New("key not found"),
+		}
+		mockUser := &mockUserRepo{}
+
+		cfg := &AuthConfig{
+			Logger:     logger.NewNopLogger(),
+			APIKeyRepo: mockAPIKey,
+			UserRepo:   mockUser,
+		}
+
+		w := httptest.NewRecorder()
+		router := gin.New()
+		router.Use(APIKeyAuth(cfg))
+		router.GET("/protected", func(c *gin.Context) {
+			c.JSON(200, gin.H{"ok": true})
+		})
+
+		req := httptest.NewRequest("GET", "/protected", nil)
+		req.Header.Set("Authorization", "Bearer mcpgw_testkey123")
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, 401, w.Code)
+		assert.Contains(t, w.Body.String(), "Invalid or expired API key")
+		assert.True(t, mockAPIKey.getCalled)
+	})
+
+	t.Run("returns 401 when user not found", func(t *testing.T) {
+		mockAPIKey := &mockAPIKeyRepo{
+			key: &repository.APIKey{
+				ID:     "key-123",
+				UserID: "user-123",
+				Name:   "Test Key",
+			},
+		}
+		mockUser := &mockUserRepo{
+			getErr: errors.New("user not found"),
+		}
+
+		cfg := &AuthConfig{
+			Logger:     logger.NewNopLogger(),
+			APIKeyRepo: mockAPIKey,
+			UserRepo:   mockUser,
+		}
+
+		w := httptest.NewRecorder()
+		router := gin.New()
+		router.Use(APIKeyAuth(cfg))
+		router.GET("/protected", func(c *gin.Context) {
+			c.JSON(200, gin.H{"ok": true})
+		})
+
+		req := httptest.NewRequest("GET", "/protected", nil)
+		req.Header.Set("Authorization", "Bearer mcpgw_testkey123")
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, 401, w.Code)
+		assert.Contains(t, w.Body.String(), "User not found")
+	})
+
+	t.Run("returns 401 when user is inactive", func(t *testing.T) {
+		mockAPIKey := &mockAPIKeyRepo{
+			key: &repository.APIKey{
+				ID:     "key-123",
+				UserID: "user-123",
+				Name:   "Test Key",
+			},
+		}
+		mockUser := &mockUserRepo{
+			user: &domain.User{
+				ID:       "user-123",
+				Email:    "test@example.com",
+				IsActive: false,
+			},
+		}
+
+		cfg := &AuthConfig{
+			Logger:     logger.NewNopLogger(),
+			APIKeyRepo: mockAPIKey,
+			UserRepo:   mockUser,
+		}
+
+		w := httptest.NewRecorder()
+		router := gin.New()
+		router.Use(APIKeyAuth(cfg))
+		router.GET("/protected", func(c *gin.Context) {
+			c.JSON(200, gin.H{"ok": true})
+		})
+
+		req := httptest.NewRequest("GET", "/protected", nil)
+		req.Header.Set("Authorization", "Bearer mcpgw_testkey123")
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, 401, w.Code)
+		assert.Contains(t, w.Body.String(), "User account is inactive")
+	})
+
+	t.Run("allows access with valid API key", func(t *testing.T) {
+		mockAPIKey := &mockAPIKeyRepo{
+			key: &repository.APIKey{
+				ID:     "key-123",
+				UserID: "user-123",
+				Name:   "Test Key",
+			},
+		}
+		mockUser := &mockUserRepo{
+			user: &domain.User{
+				ID:       "user-123",
+				Email:    "test@example.com",
+				IsActive: true,
+			},
+			roles: []string{"admin", "operator"},
+		}
+
+		cfg := &AuthConfig{
+			Logger:     logger.NewNopLogger(),
+			APIKeyRepo: mockAPIKey,
+			UserRepo:   mockUser,
+		}
+
+		w := httptest.NewRecorder()
+		router := gin.New()
+		router.Use(APIKeyAuth(cfg))
+		router.GET("/protected", func(c *gin.Context) {
+			userID := GetUserID(c)
+			email := GetUserEmail(c)
+			roles := GetUserRoles(c)
+			authType := GetAuthType(c)
+			c.JSON(200, gin.H{
+				"user_id":   userID,
+				"email":     email,
+				"roles":     roles,
+				"auth_type": authType,
+			})
+		})
+
+		req := httptest.NewRequest("GET", "/protected", nil)
+		req.Header.Set("Authorization", "Bearer mcpgw_testkey123")
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, 200, w.Code)
+		assert.Contains(t, w.Body.String(), "user-123")
+		assert.Contains(t, w.Body.String(), "apikey")
+	})
+
+	t.Run("handles roles fetch error gracefully", func(t *testing.T) {
+		mockAPIKey := &mockAPIKeyRepo{
+			key: &repository.APIKey{
+				ID:     "key-123",
+				UserID: "user-123",
+				Name:   "Test Key",
+			},
+		}
+		mockUser := &mockUserRepo{
+			user: &domain.User{
+				ID:       "user-123",
+				Email:    "test@example.com",
+				IsActive: true,
+			},
+			rolesErr: errors.New("roles fetch failed"),
+		}
+
+		cfg := &AuthConfig{
+			Logger:     logger.NewNopLogger(),
+			APIKeyRepo: mockAPIKey,
+			UserRepo:   mockUser,
+		}
+
+		w := httptest.NewRecorder()
+		router := gin.New()
+		router.Use(APIKeyAuth(cfg))
+		router.GET("/protected", func(c *gin.Context) {
+			roles := GetUserRoles(c)
+			c.JSON(200, gin.H{"roles": roles})
+		})
+
+		req := httptest.NewRequest("GET", "/protected", nil)
+		req.Header.Set("X-API-Key", "mcpgw_testkey123")
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, 200, w.Code) // Should still succeed with empty roles
+	})
+}
+
+// Tests for CombinedAuth middleware.
+func TestCombinedAuth(t *testing.T) {
+	t.Run("authenticates with API key when enabled", func(t *testing.T) {
+		mockAPIKey := &mockAPIKeyRepo{
+			key: &repository.APIKey{
+				ID:     "key-123",
+				UserID: "user-123",
+				Name:   "Test Key",
+			},
+		}
+		mockUser := &mockUserRepo{
+			user: &domain.User{
+				ID:       "user-123",
+				Email:    "test@example.com",
+				IsActive: true,
+			},
+			roles: []string{"admin"},
+		}
+
+		cfg := &AuthConfig{
+			Logger:     logger.NewNopLogger(),
+			APIKeyRepo: mockAPIKey,
+			UserRepo:   mockUser,
+			MCPAuth: MCPAuthConfig{
+				APIKeyEnabled:  true,
+				SessionEnabled: false,
+			},
+		}
+
+		w := httptest.NewRecorder()
+		router := gin.New()
+		store := cookie.NewStore([]byte("test-secret-key-32-bytes-long!!!"))
+		router.Use(sessions.Sessions("test_session", store))
+		router.Use(CombinedAuth(cfg))
+		router.GET("/protected", func(c *gin.Context) {
+			authType := GetAuthType(c)
+			c.JSON(200, gin.H{"auth_type": authType})
+		})
+
+		req := httptest.NewRequest("GET", "/protected", nil)
+		req.Header.Set("Authorization", "Bearer mcpgw_testkey123")
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, 200, w.Code)
+		assert.Contains(t, w.Body.String(), "apikey")
+	})
+
+	t.Run("returns 401 when API key is invalid", func(t *testing.T) {
+		mockAPIKey := &mockAPIKeyRepo{
+			getErr: errors.New("key not found"),
+		}
+		mockUser := &mockUserRepo{}
+
+		cfg := &AuthConfig{
+			Logger:     logger.NewNopLogger(),
+			APIKeyRepo: mockAPIKey,
+			UserRepo:   mockUser,
+			MCPAuth: MCPAuthConfig{
+				APIKeyEnabled:  true,
+				SessionEnabled: false,
+			},
+		}
+
+		w := httptest.NewRecorder()
+		router := gin.New()
+		store := cookie.NewStore([]byte("test-secret-key-32-bytes-long!!!"))
+		router.Use(sessions.Sessions("test_session", store))
+		router.Use(CombinedAuth(cfg))
+		router.GET("/protected", func(c *gin.Context) {
+			c.JSON(200, gin.H{"ok": true})
+		})
+
+		req := httptest.NewRequest("GET", "/protected", nil)
+		req.Header.Set("Authorization", "Bearer mcpgw_testkey123")
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, 401, w.Code)
+		assert.Contains(t, w.Body.String(), "Invalid or expired API key")
+	})
+
+	t.Run("ignores API key when disabled", func(t *testing.T) {
+		mockAPIKey := &mockAPIKeyRepo{}
+		mockUser := &mockUserRepo{}
+
+		cfg := &AuthConfig{
+			Logger:     logger.NewNopLogger(),
+			APIKeyRepo: mockAPIKey,
+			UserRepo:   mockUser,
+			MCPAuth: MCPAuthConfig{
+				APIKeyEnabled:  false,
+				SessionEnabled: false,
+			},
+		}
+
+		w := httptest.NewRecorder()
+		router := gin.New()
+		store := cookie.NewStore([]byte("test-secret-key-32-bytes-long!!!"))
+		router.Use(sessions.Sessions("test_session", store))
+		router.Use(CombinedAuth(cfg))
+		router.GET("/protected", func(c *gin.Context) {
+			c.JSON(200, gin.H{"ok": true})
+		})
+
+		req := httptest.NewRequest("GET", "/protected", nil)
+		req.Header.Set("Authorization", "Bearer mcpgw_testkey123")
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, 401, w.Code)
+		assert.Contains(t, w.Body.String(), "Authentication required")
+	})
+
+	t.Run("authenticates with OAuth bearer token", func(t *testing.T) {
+		mockAPIKey := &mockAPIKeyRepo{}
+		mockUser := &mockUserRepo{
+			findOrCreateUser: &domain.User{
+				ID:       "user-123",
+				Email:    "oauth@example.com",
+				IsActive: true,
+			},
+			findOrCreateNew: false,
+			roles:           []string{"user"},
+		}
+		mockOAuth := &mockOAuthValidator{
+			enabled:    true,
+			autoCreate: true,
+			userInfo: &OAuthUserInfo{
+				ID:       "oauth-ext-123",
+				Email:    "oauth@example.com",
+				Name:     "OAuth User",
+				Provider: "keycloak",
+			},
+		}
+
+		cfg := &AuthConfig{
+			Logger:         logger.NewNopLogger(),
+			APIKeyRepo:     mockAPIKey,
+			UserRepo:       mockUser,
+			OAuthValidator: mockOAuth,
+			MCPAuth: MCPAuthConfig{
+				APIKeyEnabled:  true,
+				SessionEnabled: false,
+			},
+		}
+
+		w := httptest.NewRecorder()
+		router := gin.New()
+		store := cookie.NewStore([]byte("test-secret-key-32-bytes-long!!!"))
+		router.Use(sessions.Sessions("test_session", store))
+		router.Use(CombinedAuth(cfg))
+		router.GET("/protected", func(c *gin.Context) {
+			authType := GetAuthType(c)
+			email := GetUserEmail(c)
+			c.JSON(200, gin.H{"auth_type": authType, "email": email})
+		})
+
+		req := httptest.NewRequest("GET", "/protected", nil)
+		req.Header.Set("Authorization", "Bearer eyJhbGciOiJSUzI1NiJ9.test-token")
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, 200, w.Code)
+		assert.Contains(t, w.Body.String(), "oauth")
+		assert.True(t, mockOAuth.validateCalled)
+	})
+
+	t.Run("returns 401 when OAuth token is invalid", func(t *testing.T) {
+		mockAPIKey := &mockAPIKeyRepo{}
+		mockUser := &mockUserRepo{}
+		mockOAuth := &mockOAuthValidator{
+			enabled:     true,
+			validateErr: errors.New("token invalid"),
+		}
+
+		cfg := &AuthConfig{
+			Logger:         logger.NewNopLogger(),
+			APIKeyRepo:     mockAPIKey,
+			UserRepo:       mockUser,
+			OAuthValidator: mockOAuth,
+			MCPAuth: MCPAuthConfig{
+				APIKeyEnabled:  true,
+				SessionEnabled: false,
+			},
+		}
+
+		w := httptest.NewRecorder()
+		router := gin.New()
+		store := cookie.NewStore([]byte("test-secret-key-32-bytes-long!!!"))
+		router.Use(sessions.Sessions("test_session", store))
+		router.Use(CombinedAuth(cfg))
+		router.GET("/protected", func(c *gin.Context) {
+			c.JSON(200, gin.H{"ok": true})
+		})
+
+		req := httptest.NewRequest("GET", "/protected", nil)
+		req.Header.Set("Authorization", "Bearer oauth-token")
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, 401, w.Code)
+		assert.Contains(t, w.Body.String(), "Invalid or expired OAuth token")
+	})
+
+	t.Run("creates new user with default role on first OAuth login", func(t *testing.T) {
+		mockAPIKey := &mockAPIKeyRepo{}
+		mockUser := &mockUserRepo{
+			findOrCreateUser: &domain.User{
+				ID:       "user-new",
+				Email:    "new@example.com",
+				IsActive: true,
+			},
+			findOrCreateNew: true, // New user
+			roles:           []string{},
+		}
+		mockOAuth := &mockOAuthValidator{
+			enabled:     true,
+			autoCreate:  true,
+			defaultRole: "viewer",
+			userInfo: &OAuthUserInfo{
+				ID:       "oauth-new-123",
+				Email:    "new@example.com",
+				Name:     "New User",
+				Provider: "keycloak",
+			},
+		}
+
+		cfg := &AuthConfig{
+			Logger:         logger.NewNopLogger(),
+			APIKeyRepo:     mockAPIKey,
+			UserRepo:       mockUser,
+			OAuthValidator: mockOAuth,
+			MCPAuth: MCPAuthConfig{
+				APIKeyEnabled:  true,
+				SessionEnabled: false,
+			},
+		}
+
+		w := httptest.NewRecorder()
+		router := gin.New()
+		store := cookie.NewStore([]byte("test-secret-key-32-bytes-long!!!"))
+		router.Use(sessions.Sessions("test_session", store))
+		router.Use(CombinedAuth(cfg))
+		router.GET("/protected", func(c *gin.Context) {
+			c.JSON(200, gin.H{"ok": true})
+		})
+
+		req := httptest.NewRequest("GET", "/protected", nil)
+		req.Header.Set("Authorization", "Bearer oauth-token")
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, 200, w.Code)
+		assert.True(t, mockUser.assignCalled)
+		assert.Equal(t, "viewer", mockUser.lastRole)
+	})
+
+	t.Run("returns 401 when OAuth user not found and auto-create disabled", func(t *testing.T) {
+		mockAPIKey := &mockAPIKeyRepo{}
+		mockUser := &mockUserRepo{
+			findOrCreateErr: errors.New("user not found"),
+		}
+		mockOAuth := &mockOAuthValidator{
+			enabled:    true,
+			autoCreate: false,
+			userInfo: &OAuthUserInfo{
+				ID:       "oauth-123",
+				Email:    "oauth@example.com",
+				Name:     "OAuth User",
+				Provider: "keycloak",
+			},
+		}
+
+		cfg := &AuthConfig{
+			Logger:         logger.NewNopLogger(),
+			APIKeyRepo:     mockAPIKey,
+			UserRepo:       mockUser,
+			OAuthValidator: mockOAuth,
+			MCPAuth: MCPAuthConfig{
+				APIKeyEnabled:  true,
+				SessionEnabled: false,
+			},
+		}
+
+		w := httptest.NewRecorder()
+		router := gin.New()
+		store := cookie.NewStore([]byte("test-secret-key-32-bytes-long!!!"))
+		router.Use(sessions.Sessions("test_session", store))
+		router.Use(CombinedAuth(cfg))
+		router.GET("/protected", func(c *gin.Context) {
+			c.JSON(200, gin.H{"ok": true})
+		})
+
+		req := httptest.NewRequest("GET", "/protected", nil)
+		req.Header.Set("Authorization", "Bearer oauth-token")
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, 401, w.Code)
+		assert.Contains(t, w.Body.String(), "User not registered")
+	})
+
+	t.Run("returns 401 when OAuth user is inactive", func(t *testing.T) {
+		mockAPIKey := &mockAPIKeyRepo{}
+		mockUser := &mockUserRepo{
+			findOrCreateUser: &domain.User{
+				ID:       "user-123",
+				Email:    "oauth@example.com",
+				IsActive: false, // Inactive
+			},
+		}
+		mockOAuth := &mockOAuthValidator{
+			enabled:    true,
+			autoCreate: true,
+			userInfo: &OAuthUserInfo{
+				ID:       "oauth-123",
+				Email:    "oauth@example.com",
+				Name:     "OAuth User",
+				Provider: "keycloak",
+			},
+		}
+
+		cfg := &AuthConfig{
+			Logger:         logger.NewNopLogger(),
+			APIKeyRepo:     mockAPIKey,
+			UserRepo:       mockUser,
+			OAuthValidator: mockOAuth,
+			MCPAuth: MCPAuthConfig{
+				APIKeyEnabled:  true,
+				SessionEnabled: false,
+			},
+		}
+
+		w := httptest.NewRecorder()
+		router := gin.New()
+		store := cookie.NewStore([]byte("test-secret-key-32-bytes-long!!!"))
+		router.Use(sessions.Sessions("test_session", store))
+		router.Use(CombinedAuth(cfg))
+		router.GET("/protected", func(c *gin.Context) {
+			c.JSON(200, gin.H{"ok": true})
+		})
+
+		req := httptest.NewRequest("GET", "/protected", nil)
+		req.Header.Set("Authorization", "Bearer oauth-token")
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, 401, w.Code)
+		assert.Contains(t, w.Body.String(), "User account is inactive")
+	})
+
+	t.Run("authenticates with session when enabled", func(t *testing.T) {
+		cfg := &AuthConfig{
+			Logger: logger.NewNopLogger(),
+			MCPAuth: MCPAuthConfig{
+				APIKeyEnabled:  false,
+				SessionEnabled: true,
+			},
+		}
+
+		w := httptest.NewRecorder()
+		router := gin.New()
+		store := cookie.NewStore([]byte("test-secret-key-32-bytes-long!!!"))
+		router.Use(sessions.Sessions("test_session", store))
+
+		// First request to set session
+		router.GET("/set-session", func(c *gin.Context) {
+			session := sessions.Default(c)
+			session.Set(ContextKeyUserID, "session-user-123")
+			session.Set(ContextKeyUserEmail, "session@example.com")
+			session.Set(ContextKeyUserRoles, []string{"user"})
+			_ = session.Save()
+			c.JSON(200, gin.H{"status": "session set"})
+		})
+
+		router.GET("/protected", CombinedAuth(cfg), func(c *gin.Context) {
+			authType := GetAuthType(c)
+			userID := GetUserID(c)
+			c.JSON(200, gin.H{"auth_type": authType, "user_id": userID})
+		})
+
+		// Set session first
+		req1 := httptest.NewRequest("GET", "/set-session", nil)
+		router.ServeHTTP(w, req1)
+		cookies := w.Result().Cookies()
+
+		// Then access protected route with session cookie
+		w2 := httptest.NewRecorder()
+		req2 := httptest.NewRequest("GET", "/protected", nil)
+		for _, c := range cookies {
+			req2.AddCookie(c)
+		}
+		router.ServeHTTP(w2, req2)
+
+		assert.Equal(t, 200, w2.Code)
+		assert.Contains(t, w2.Body.String(), "session")
+		assert.Contains(t, w2.Body.String(), "session-user-123")
+	})
+
+	t.Run("returns 401 when no authentication provided", func(t *testing.T) {
+		cfg := &AuthConfig{
+			Logger: logger.NewNopLogger(),
+			MCPAuth: MCPAuthConfig{
+				APIKeyEnabled:  false,
+				SessionEnabled: true,
+			},
+		}
+
+		w := httptest.NewRecorder()
+		router := gin.New()
+		store := cookie.NewStore([]byte("test-secret-key-32-bytes-long!!!"))
+		router.Use(sessions.Sessions("test_session", store))
+		router.Use(CombinedAuth(cfg))
+		router.GET("/protected", func(c *gin.Context) {
+			c.JSON(200, gin.H{"ok": true})
+		})
+
+		req := httptest.NewRequest("GET", "/protected", nil)
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, 401, w.Code)
+		assert.Contains(t, w.Body.String(), "Authentication required")
+	})
+}
+
+// Tests for OptionalAuth middleware.
+func TestOptionalAuth(t *testing.T) {
+	t.Run("allows anonymous access", func(t *testing.T) {
+		mockAPIKey := &mockAPIKeyRepo{}
+		mockUser := &mockUserRepo{}
+
+		cfg := &AuthConfig{
+			Logger:     logger.NewNopLogger(),
+			APIKeyRepo: mockAPIKey,
+			UserRepo:   mockUser,
+		}
+
+		w := httptest.NewRecorder()
+		router := gin.New()
+		store := cookie.NewStore([]byte("test-secret-key-32-bytes-long!!!"))
+		router.Use(sessions.Sessions("test_session", store))
+		router.Use(OptionalAuth(cfg))
+		router.GET("/public", func(c *gin.Context) {
+			userID := GetUserID(c)
+			if userID == "" {
+				c.JSON(200, gin.H{"anonymous": true})
+			} else {
+				c.JSON(200, gin.H{"user_id": userID})
+			}
+		})
+
+		req := httptest.NewRequest("GET", "/public", nil)
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, 200, w.Code)
+		assert.Contains(t, w.Body.String(), "anonymous")
+	})
+
+	t.Run("extracts user info from valid API key", func(t *testing.T) {
+		mockAPIKey := &mockAPIKeyRepo{
+			key: &repository.APIKey{
+				ID:     "key-123",
+				UserID: "user-123",
+				Name:   "Test Key",
+			},
+		}
+		mockUser := &mockUserRepo{
+			user: &domain.User{
+				ID:       "user-123",
+				Email:    "test@example.com",
+				IsActive: true,
+			},
+			roles: []string{"admin"},
+		}
+
+		cfg := &AuthConfig{
+			Logger:     logger.NewNopLogger(),
+			APIKeyRepo: mockAPIKey,
+			UserRepo:   mockUser,
+		}
+
+		w := httptest.NewRecorder()
+		router := gin.New()
+		store := cookie.NewStore([]byte("test-secret-key-32-bytes-long!!!"))
+		router.Use(sessions.Sessions("test_session", store))
+		router.Use(OptionalAuth(cfg))
+		router.GET("/public", func(c *gin.Context) {
+			userID := GetUserID(c)
+			authType := GetAuthType(c)
+			c.JSON(200, gin.H{"user_id": userID, "auth_type": authType})
+		})
+
+		req := httptest.NewRequest("GET", "/public", nil)
+		req.Header.Set("Authorization", "Bearer mcpgw_testkey123")
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, 200, w.Code)
+		assert.Contains(t, w.Body.String(), "user-123")
+		assert.Contains(t, w.Body.String(), "apikey")
+	})
+
+	t.Run("allows anonymous when API key is invalid", func(t *testing.T) {
+		mockAPIKey := &mockAPIKeyRepo{
+			getErr: errors.New("key not found"),
+		}
+		mockUser := &mockUserRepo{}
+
+		cfg := &AuthConfig{
+			Logger:     logger.NewNopLogger(),
+			APIKeyRepo: mockAPIKey,
+			UserRepo:   mockUser,
+		}
+
+		w := httptest.NewRecorder()
+		router := gin.New()
+		store := cookie.NewStore([]byte("test-secret-key-32-bytes-long!!!"))
+		router.Use(sessions.Sessions("test_session", store))
+		router.Use(OptionalAuth(cfg))
+		router.GET("/public", func(c *gin.Context) {
+			userID := GetUserID(c)
+			if userID == "" {
+				c.JSON(200, gin.H{"anonymous": true})
+			} else {
+				c.JSON(200, gin.H{"user_id": userID})
+			}
+		})
+
+		req := httptest.NewRequest("GET", "/public", nil)
+		req.Header.Set("Authorization", "Bearer mcpgw_invalidkey")
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, 200, w.Code)
+		assert.Contains(t, w.Body.String(), "anonymous")
+	})
+
+	t.Run("extracts user info from session", func(t *testing.T) {
+		mockAPIKey := &mockAPIKeyRepo{}
+		mockUser := &mockUserRepo{}
+
+		cfg := &AuthConfig{
+			Logger:     logger.NewNopLogger(),
+			APIKeyRepo: mockAPIKey,
+			UserRepo:   mockUser,
+		}
+
+		w := httptest.NewRecorder()
+		router := gin.New()
+		store := cookie.NewStore([]byte("test-secret-key-32-bytes-long!!!"))
+		router.Use(sessions.Sessions("test_session", store))
+
+		// First request to set session
+		router.GET("/set-session", func(c *gin.Context) {
+			session := sessions.Default(c)
+			session.Set(ContextKeyUserID, "session-user-456")
+			session.Set(ContextKeyUserEmail, "session@example.com")
+			session.Set(ContextKeyUserRoles, []string{"viewer"})
+			_ = session.Save()
+			c.JSON(200, gin.H{"status": "session set"})
+		})
+
+		router.GET("/public", OptionalAuth(cfg), func(c *gin.Context) {
+			userID := GetUserID(c)
+			authType := GetAuthType(c)
+			c.JSON(200, gin.H{"user_id": userID, "auth_type": authType})
+		})
+
+		// Set session first
+		req1 := httptest.NewRequest("GET", "/set-session", nil)
+		router.ServeHTTP(w, req1)
+		cookies := w.Result().Cookies()
+
+		// Then access public route with session cookie
+		w2 := httptest.NewRecorder()
+		req2 := httptest.NewRequest("GET", "/public", nil)
+		for _, c := range cookies {
+			req2.AddCookie(c)
+		}
+		router.ServeHTTP(w2, req2)
+
+		assert.Equal(t, 200, w2.Code)
+		assert.Contains(t, w2.Body.String(), "session-user-456")
+		assert.Contains(t, w2.Body.String(), "session")
+	})
+
+	t.Run("skips inactive user from API key", func(t *testing.T) {
+		mockAPIKey := &mockAPIKeyRepo{
+			key: &repository.APIKey{
+				ID:     "key-123",
+				UserID: "user-123",
+				Name:   "Test Key",
+			},
+		}
+		mockUser := &mockUserRepo{
+			user: &domain.User{
+				ID:       "user-123",
+				Email:    "test@example.com",
+				IsActive: false, // Inactive
+			},
+		}
+
+		cfg := &AuthConfig{
+			Logger:     logger.NewNopLogger(),
+			APIKeyRepo: mockAPIKey,
+			UserRepo:   mockUser,
+		}
+
+		w := httptest.NewRecorder()
+		router := gin.New()
+		store := cookie.NewStore([]byte("test-secret-key-32-bytes-long!!!"))
+		router.Use(sessions.Sessions("test_session", store))
+		router.Use(OptionalAuth(cfg))
+		router.GET("/public", func(c *gin.Context) {
+			userID := GetUserID(c)
+			if userID == "" {
+				c.JSON(200, gin.H{"anonymous": true})
+			} else {
+				c.JSON(200, gin.H{"user_id": userID})
+			}
+		})
+
+		req := httptest.NewRequest("GET", "/public", nil)
+		req.Header.Set("Authorization", "Bearer mcpgw_testkey123")
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, 200, w.Code)
+		assert.Contains(t, w.Body.String(), "anonymous")
+	})
+}
+
+// Tests for NewAuthConfig function.
+func TestNewAuthConfig(t *testing.T) {
+	t.Run("creates config with nil repos", func(t *testing.T) {
+		cfg := NewAuthConfig(
+			logger.NewNopLogger(),
+			nil,
+			nil,
+			nil,
+			"test_session",
+			MCPAuthConfig{APIKeyEnabled: true},
+		)
+
+		require.NotNil(t, cfg)
+		assert.Nil(t, cfg.UserRepo)
+		assert.Nil(t, cfg.APIKeyRepo)
+		assert.Equal(t, "test_session", cfg.SessionName)
+		assert.True(t, cfg.MCPAuth.APIKeyEnabled)
 	})
 }

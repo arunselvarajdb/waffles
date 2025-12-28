@@ -160,7 +160,7 @@ linters-settings:
     sections:
       - standard
       - default
-      - prefix(github.com/waffles/mcp-gateway)
+      - prefix(github.com/waffles/waffles)
     skip-generated: true
 
 issues:

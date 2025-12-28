@@ -1,0 +1,29 @@
+apiVersion: v2
+name: waffles
+description: A Helm chart for Waffles - Production-ready Model Context Protocol gateway platform
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+
+keywords:
+  - waffles
+  - mcp
+  - gateway
+  - model-context-protocol
+  - ai
+  - llm
+
+home: https://github.com/waffles/waffles
+
+maintainers:
+  - name: Waffles Team
+
+dependencies:
+  # PostgreSQL - can be disabled if using external database
+  - name: postgresql
+    version: "15.5.38"
+    repository: https://charts.bitnami.com/bitnami
+    condition: postgresql.enabled
+
+annotations:
+  artifacthub.io/license: Apache-2.0

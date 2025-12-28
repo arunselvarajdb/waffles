@@ -283,9 +283,9 @@ jobs:
       - name: Verify binary
         if: matrix.goos == 'linux'
         run: |
-          file bin/mcp-gateway-${{ matrix.goos }}-${{ matrix.goarch }}
+          file bin/waffles-${{ matrix.goos }}-${{ matrix.goarch }}
           # Verify it's a static binary
-          if ldd bin/mcp-gateway-${{ matrix.goos }}-${{ matrix.goarch }} 2>&1 | grep -q "not a dynamic executable"; then
+          if ldd bin/waffles-${{ matrix.goos }}-${{ matrix.goarch }} 2>&1 | grep -q "not a dynamic executable"; then
             echo "✅ Binary is statically linked"
           else
             echo "❌ Binary is not statically linked"
@@ -295,8 +295,8 @@ jobs:
       - name: Upload binary artifact
         uses: actions/upload-artifact@v4
         with:
-          name: mcp-gateway-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: bin/mcp-gateway-${{ matrix.goos }}-${{ matrix.goarch }}
+          name: waffles-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: bin/waffles-${{ matrix.goos }}-${{ matrix.goarch }}
           retention-days: 7
 
   summary:

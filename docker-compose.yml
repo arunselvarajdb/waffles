@@ -1,10 +1,10 @@
 version: '3.8'
 
 services:
-  # PostgreSQL Database for MCP Gateway
+  # PostgreSQL Database for Waffles
   postgres:
     image: postgres:15-alpine
-    container_name: mcp-gateway-db
+    container_name: waffles-db
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
@@ -21,12 +21,12 @@ services:
     networks:
       - mcp-network
 
-  # MCP Gateway
+  # Waffles Gateway
   gateway:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: mcp-gateway
+    container_name: waffles
     environment:
       DATABASE_HOST: postgres
       DATABASE_PORT: 5432

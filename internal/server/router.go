@@ -11,21 +11,23 @@ import (
 	"github.com/gin-contrib/sessions/cookie"
 	"github.com/gin-gonic/gin"
 
-	"github.com/waffles/mcp-gateway/internal/handler"
-	"github.com/waffles/mcp-gateway/internal/handler/middleware"
-	"github.com/waffles/mcp-gateway/internal/repository"
-	"github.com/waffles/mcp-gateway/internal/service/audit"
-	"github.com/waffles/mcp-gateway/internal/service/authz"
-	"github.com/waffles/mcp-gateway/internal/service/gateway"
-	"github.com/waffles/mcp-gateway/internal/service/oauth"
-	"github.com/waffles/mcp-gateway/internal/service/registry"
-	"github.com/waffles/mcp-gateway/internal/service/serveraccess"
+	"github.com/waffles/waffles/internal/handler"
+	"github.com/waffles/waffles/internal/handler/middleware"
+	"github.com/waffles/waffles/internal/repository"
+	"github.com/waffles/waffles/internal/service/audit"
+	"github.com/waffles/waffles/internal/service/authz"
+	"github.com/waffles/waffles/internal/service/gateway"
+	"github.com/waffles/waffles/internal/service/oauth"
+	"github.com/waffles/waffles/internal/service/registry"
+	"github.com/waffles/waffles/internal/service/serveraccess"
 )
 
 // SetupRoutes configures all routes for the server
 func (s *Server) SetupRoutes() {
 	// Apply global middleware
 	s.router.Use(middleware.Recovery(s.logger))
+	// Security headers - positioned early to ensure all responses have headers
+	s.router.Use(middleware.SecurityHeaders())
 	// Metrics middleware - positioned after recovery, before logging for accurate timing
 	if s.metrics != nil {
 		s.router.Use(middleware.Metrics(s.metrics))

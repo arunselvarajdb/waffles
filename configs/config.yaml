@@ -1,4 +1,4 @@
-# MCP Gateway - Default Configuration
+# Waffles - Default Configuration
 # All values can be overridden with environment variables
 
 server:
@@ -62,8 +62,8 @@ auth:
     # Set redirect URI in your provider to: {base_url}/api/v1/auth/sso/callback
     #
     # Example issuer URLs for common providers:
-    #   Keycloak:   http://localhost:8180/realms/mcp-gateway (local dev)
-    #               https://auth.example.com/realms/mcp-gateway (production)
+    #   Keycloak:   http://localhost:8180/realms/waffles (local dev)
+    #               https://auth.example.com/realms/waffles (production)
     #   Zitadel:    https://auth.example.com
     #   Okta:       https://mycompany.okta.com/oauth2/default
     #   Auth0:      https://mycompany.auth0.com/
@@ -83,7 +83,7 @@ secrets:
   provider: env # Use 'env' for local dev, 'aws' for production
   aws:
     region: us-east-1
-    secret_prefix: mcp-gateway
+    secret_prefix: waffles
 
 logging:
   level: info # debug, info, warn, error

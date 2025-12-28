@@ -90,7 +90,7 @@ func setDefaults(v *viper.Viper) {
 	// Secrets defaults
 	v.SetDefault("secrets.provider", "env")
 	v.SetDefault("secrets.aws.region", "us-east-1")
-	v.SetDefault("secrets.aws.secret_prefix", "mcp-gateway")
+	v.SetDefault("secrets.aws.secret_prefix", "waffles")
 
 	// Logging defaults
 	v.SetDefault("logging.level", "info")

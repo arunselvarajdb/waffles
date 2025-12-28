@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/waffles/mcp-gateway/pkg/logger"
+	"github.com/waffles/waffles/pkg/logger"
 )
 
 func init() {
@@ -80,7 +80,7 @@ func TestHealthHandler_Health(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.Equal(t, "healthy", response["status"])
-		assert.Equal(t, "mcp-gateway", response["service"])
+		assert.Equal(t, "waffles", response["service"])
 	})
 }
 

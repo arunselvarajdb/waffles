@@ -8,8 +8,9 @@ import (
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
 
-	"github.com/waffles/mcp-gateway/internal/repository"
-	"github.com/waffles/mcp-gateway/pkg/logger"
+	"github.com/waffles/waffles/internal/domain"
+	"github.com/waffles/waffles/internal/repository"
+	"github.com/waffles/waffles/pkg/logger"
 )
 
 // UserContext keys for storing user information in the request context
@@ -47,6 +48,20 @@ type OAuthUserInfo struct {
 	Provider string
 }
 
+// APIKeyRepoInterface defines the interface for API key repository operations.
+type APIKeyRepoInterface interface {
+	GetByHash(ctx context.Context, keyHash string) (*repository.APIKey, error)
+	UpdateLastUsed(ctx context.Context, keyID string) error
+}
+
+// UserRepoInterface defines the interface for user repository operations.
+type UserRepoInterface interface {
+	GetByID(ctx context.Context, id string) (*domain.User, error)
+	GetUserRoles(ctx context.Context, userID string) ([]string, error)
+	FindOrCreateOAuthUser(ctx context.Context, provider, externalID, email, name string) (*domain.User, bool, error)
+	AssignRole(ctx context.Context, userID, role string) error
+}
+
 // MCPAuthConfig controls which authentication methods are accepted for MCP clients
 type MCPAuthConfig struct {
 	APIKeyEnabled  bool
@@ -56,11 +71,23 @@ type MCPAuthConfig struct {
 // AuthConfig contains configuration for authentication middleware
 type AuthConfig struct {
 	Logger         logger.Logger
-	UserRepo       *repository.UserRepository
-	APIKeyRepo     *repository.APIKeyRepository
+	UserRepo       UserRepoInterface
+	APIKeyRepo     APIKeyRepoInterface
 	OAuthValidator OAuthValidator
 	SessionName    string
 	MCPAuth        MCPAuthConfig
+}
+
+// NewAuthConfig creates an AuthConfig from concrete repository types.
+func NewAuthConfig(log logger.Logger, userRepo *repository.UserRepository, apiKeyRepo *repository.APIKeyRepository, oauthValidator OAuthValidator, sessionName string, mcpAuth MCPAuthConfig) *AuthConfig {
+	return &AuthConfig{
+		Logger:         log,
+		UserRepo:       userRepo,
+		APIKeyRepo:     apiKeyRepo,
+		OAuthValidator: oauthValidator,
+		SessionName:    sessionName,
+		MCPAuth:        mcpAuth,
+	}
 }
 
 // SessionAuth creates a middleware that validates session-based authentication

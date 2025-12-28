@@ -8,10 +8,10 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/waffles/mcp-gateway/internal/domain"
-	"github.com/waffles/mcp-gateway/internal/handler/middleware"
-	"github.com/waffles/mcp-gateway/internal/repository"
-	"github.com/waffles/mcp-gateway/pkg/logger"
+	"github.com/waffles/waffles/internal/domain"
+	"github.com/waffles/waffles/internal/handler/middleware"
+	"github.com/waffles/waffles/internal/repository"
+	"github.com/waffles/waffles/pkg/logger"
 )
 
 // APIKeyHandler handles API key-related HTTP requests

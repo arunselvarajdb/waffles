@@ -6,7 +6,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/waffles/mcp-gateway/internal/domain"
+	"github.com/waffles/waffles/internal/domain"
 )
 
 // AuditRepository handles audit log data access

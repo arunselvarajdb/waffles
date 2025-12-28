@@ -6,8 +6,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/waffles/mcp-gateway/internal/database"
-	"github.com/waffles/mcp-gateway/pkg/logger"
+	"github.com/waffles/waffles/internal/database"
+	"github.com/waffles/waffles/pkg/logger"
 )
 
 // HealthHandler handles health check endpoints
@@ -65,7 +65,7 @@ func (h *HealthHandler) Health(c *gin.Context) {
 	// Basic health check - service is running
 	c.JSON(http.StatusOK, gin.H{
 		"status":  "healthy",
-		"service": "mcp-gateway",
+		"service": "waffles",
 	})
 }
 
