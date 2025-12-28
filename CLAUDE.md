@@ -125,6 +125,13 @@ Config is loaded from `configs/config.yaml` with environment variable overrides.
 - `metrics`: Prometheus settings (port 9090)
 - `logging`: level and format (json/console)
 
+## Git Workflow
+
+- **Always create a new branch** when adding new features or major refactoring
+- Branch naming: `feat/<feature-name>`, `fix/<bug-name>`, `refactor/<description>`
+- Keep commits focused and atomic
+- Write descriptive commit messages following conventional commits format
+
 ## Import Ordering
 
 Imports follow gci configuration: standard library → third-party → project packages (github.com/waffles/waffles).
