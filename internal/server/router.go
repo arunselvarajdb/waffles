@@ -12,6 +12,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/waffles/waffles/internal/handler"
+	"github.com/waffles/waffles/internal/handler/admin"
 	"github.com/waffles/waffles/internal/handler/middleware"
 	"github.com/waffles/waffles/internal/repository"
 	"github.com/waffles/waffles/internal/service/audit"
@@ -19,7 +20,9 @@ import (
 	"github.com/waffles/waffles/internal/service/gateway"
 	"github.com/waffles/waffles/internal/service/oauth"
 	"github.com/waffles/waffles/internal/service/registry"
+	"github.com/waffles/waffles/internal/service/role"
 	"github.com/waffles/waffles/internal/service/serveraccess"
+	"github.com/waffles/waffles/internal/service/user"
 )
 
 // SetupRoutes configures all routes for the server
@@ -247,6 +250,52 @@ func (s *Server) SetupRoutes() {
 				namespaces.GET("/:id/access", namespaceHandler.ListRoleAccess)
 				namespaces.POST("/:id/access", namespaceHandler.SetRoleAccess)
 				namespaces.DELETE("/:id/access/:role_id", namespaceHandler.RemoveRoleAccess)
+			}
+
+			// Admin routes (admin role required)
+			adminGroup := protected.Group("/admin")
+			if authEnabled && authzConfig != nil {
+				adminGroup.Use(middleware.Authz(authzConfig))
+			}
+			{
+				// Initialize admin services
+				userService := user.NewService(userRepo, s.logger)
+				roleService := role.NewService(s.db.Pool, s.logger)
+
+				// Initialize admin handlers
+				usersHandler := admin.NewUsersHandler(userService, s.logger)
+				sessionsHandler := admin.NewSessionsHandler(s.logger)
+				rolesHandler := admin.NewRolesHandler(roleService, s.logger)
+
+				// User management
+				users := adminGroup.Group("/users")
+				{
+					users.GET("", usersHandler.ListUsers)
+					users.POST("", usersHandler.CreateUser)
+					users.GET("/:id", usersHandler.GetUser)
+					users.PUT("/:id", usersHandler.UpdateUser)
+					users.DELETE("/:id", usersHandler.DeleteUser)
+					users.PUT("/:id/roles", usersHandler.UpdateUserRoles)
+					users.POST("/:id/reset-password", usersHandler.ResetPassword)
+
+					// Session management
+					users.GET("/:id/sessions", sessionsHandler.ListUserSessions)
+					users.DELETE("/:id/sessions", sessionsHandler.RevokeAllUserSessions)
+					users.DELETE("/:id/sessions/:sid", sessionsHandler.RevokeSession)
+				}
+
+				// Role management
+				roles := adminGroup.Group("/roles")
+				{
+					roles.GET("", rolesHandler.ListRoles)
+					roles.POST("", rolesHandler.CreateRole)
+					roles.GET("/:id", rolesHandler.GetRole)
+					roles.PUT("/:id", rolesHandler.UpdateRole)
+					roles.DELETE("/:id", rolesHandler.DeleteRole)
+				}
+
+				// Permissions (read-only)
+				adminGroup.GET("/permissions", rolesHandler.ListPermissions)
 			}
 		}
 	}
