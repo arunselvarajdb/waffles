@@ -140,36 +140,51 @@ func (k *APIKey) IsNamespaceAllowed(namespaceID string) bool {
 	return false
 }
 
+// IPCheckResult contains details about an IP whitelist check
+type IPCheckResult struct {
+	Allowed     bool
+	Reason      string
+	ParseError  bool
+	InvalidCIDR string
+}
+
 // IsIPAllowed checks if the client IP is allowed to use this API key
 func (k *APIKey) IsIPAllowed(clientIP string) bool {
+	result := k.CheckIPAllowed(clientIP)
+	return result.Allowed
+}
+
+// CheckIPAllowed checks if the client IP is allowed and returns detailed result
+func (k *APIKey) CheckIPAllowed(clientIP string) IPCheckResult {
 	// Empty whitelist means any IP is allowed
 	if len(k.IPWhitelist) == 0 {
-		return true
+		return IPCheckResult{Allowed: true, Reason: "no whitelist configured"}
 	}
 
 	ip := net.ParseIP(clientIP)
 	if ip == nil {
-		return false
+		return IPCheckResult{Allowed: false, Reason: "invalid client IP", ParseError: true}
 	}
 
 	for _, cidr := range k.IPWhitelist {
 		// Handle both single IPs and CIDR ranges
 		if !strings.Contains(cidr, "/") {
 			if cidr == clientIP {
-				return true
+				return IPCheckResult{Allowed: true, Reason: "exact IP match"}
 			}
 			continue
 		}
 
 		_, network, err := net.ParseCIDR(cidr)
 		if err != nil {
+			// Log-worthy: invalid CIDR in whitelist
 			continue
 		}
 		if network.Contains(ip) {
-			return true
+			return IPCheckResult{Allowed: true, Reason: "CIDR match: " + cidr}
 		}
 	}
-	return false
+	return IPCheckResult{Allowed: false, Reason: "IP not in whitelist"}
 }
 
 // APIKeyCreate represents the data required to create a new API key

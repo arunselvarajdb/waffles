@@ -96,9 +96,10 @@
             <BaseInput
               v-model="ipInput"
               placeholder="e.g., 192.168.1.0/24 or 10.0.0.1"
+              :error="errors.ip"
               @keydown.enter.prevent="addIp"
             />
-            <p class="mt-1 text-xs text-gray-500">
+            <p v-if="!errors.ip" class="mt-1 text-xs text-gray-500">
               Press Enter to add. Leave empty to allow all IPs.
             </p>
             <div v-if="form.ip_whitelist.length" class="mt-2 flex flex-wrap gap-2">
@@ -223,9 +224,57 @@ watch(isOpen, (value) => {
   }
 })
 
+// Validate IP address or CIDR notation
+const isValidIpOrCidr = (value) => {
+  // IPv4 pattern
+  const ipv4Pattern = /^(\d{1,3}\.){3}\d{1,3}$/
+  // IPv6 pattern (simplified)
+  const ipv6Pattern = /^([0-9a-fA-F]{0,4}:){2,7}[0-9a-fA-F]{0,4}$/
+  // CIDR suffix pattern
+  const cidrSuffix = /\/\d{1,3}$/
+
+  // Remove CIDR suffix for IP validation
+  const ipPart = value.replace(cidrSuffix, '')
+  const hasCidr = cidrSuffix.test(value)
+
+  // Validate IP part
+  if (ipv4Pattern.test(ipPart)) {
+    // Validate each octet is 0-255
+    const octets = ipPart.split('.')
+    const validOctets = octets.every(o => parseInt(o, 10) >= 0 && parseInt(o, 10) <= 255)
+    if (!validOctets) return false
+
+    // Validate CIDR prefix if present (0-32 for IPv4)
+    if (hasCidr) {
+      const prefix = parseInt(value.split('/')[1], 10)
+      return prefix >= 0 && prefix <= 32
+    }
+    return true
+  }
+
+  if (ipv6Pattern.test(ipPart)) {
+    // Validate CIDR prefix if present (0-128 for IPv6)
+    if (hasCidr) {
+      const prefix = parseInt(value.split('/')[1], 10)
+      return prefix >= 0 && prefix <= 128
+    }
+    return true
+  }
+
+  return false
+}
+
 const addIp = () => {
   const ip = ipInput.value.trim()
-  if (ip && !form.value.ip_whitelist.includes(ip)) {
+  if (!ip) return
+
+  if (!isValidIpOrCidr(ip)) {
+    errors.value.ip = 'Invalid IP address or CIDR notation'
+    return
+  }
+
+  errors.value.ip = null
+  if (!form.value.ip_whitelist.includes(ip)) {
     form.value.ip_whitelist.push(ip)
     ipInput.value = ''
   }

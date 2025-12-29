@@ -7,14 +7,26 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/waffles/waffles/internal/domain"
+	"github.com/waffles/waffles/pkg/logger"
 )
 
 // ScopeMiddleware provides scope-based access control for API keys
-type ScopeMiddleware struct{}
+type ScopeMiddleware struct {
+	logger logger.Logger
+}
 
 // NewScopeMiddleware creates a new scope middleware
 func NewScopeMiddleware() *ScopeMiddleware {
-	return &ScopeMiddleware{}
+	return &ScopeMiddleware{
+		logger: logger.NewNop(),
+	}
+}
+
+// NewScopeMiddlewareWithLogger creates a new scope middleware with logging
+func NewScopeMiddlewareWithLogger(log logger.Logger) *ScopeMiddleware {
+	return &ScopeMiddleware{
+		logger: log,
+	}
 }
 
 // RequireScope returns middleware that requires a specific scope
@@ -29,6 +41,13 @@ func (m *ScopeMiddleware) RequireScope(scope string) gin.HandlerFunc {
 
 		// Check if API key has required scope
 		if !apiKey.HasScope(scope) {
+			m.logger.Warn().
+				Str("api_key_id", apiKey.ID).
+				Str("required_scope", scope).
+				Any("key_scopes", apiKey.Scopes).
+				Str("path", c.Request.URL.Path).
+				Str("method", c.Request.Method).
+				Msg("API key scope validation failed")
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
 				"error":          "Insufficient scope",
 				"required_scope": scope,
@@ -36,8 +55,19 @@ func (m *ScopeMiddleware) RequireScope(scope string) gin.HandlerFunc {
 			return
 		}
 
-		// Check IP whitelist
-		if !apiKey.IsIPAllowed(c.ClientIP()) {
+		// Check IP whitelist with detailed result
+		ipResult := apiKey.CheckIPAllowed(c.ClientIP())
+		if !ipResult.Allowed {
+			logEvent := m.logger.Warn().
+				Str("api_key_id", apiKey.ID).
+				Str("client_ip", c.ClientIP()).
+				Any("ip_whitelist", apiKey.IPWhitelist).
+				Str("path", c.Request.URL.Path).
+				Str("reason", ipResult.Reason)
+			if ipResult.ParseError {
+				logEvent.Bool("parse_error", true)
+			}
+			logEvent.Msg("API key IP whitelist validation failed")
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
 				"error": "IP address not allowed for this API key",
 			})
@@ -46,6 +76,11 @@ func (m *ScopeMiddleware) RequireScope(scope string) gin.HandlerFunc {
 
 		// Check read-only restriction
 		if apiKey.ReadOnly && !isReadOnlyMethod(c.Request.Method) {
+			m.logger.Warn().
+				Str("api_key_id", apiKey.ID).
+				Str("method", c.Request.Method).
+				Str("path", c.Request.URL.Path).
+				Msg("API key read-only restriction violated")
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
 				"error": "API key is read-only",
 			})
@@ -66,6 +101,13 @@ func (m *ScopeMiddleware) RequireAnyScope(scopes ...string) gin.HandlerFunc {
 		}
 
 		if !apiKey.HasAnyScope(scopes...) {
+			m.logger.Warn().
+				Str("api_key_id", apiKey.ID).
+				Any("required_scopes", scopes).
+				Any("key_scopes", apiKey.Scopes).
+				Str("path", c.Request.URL.Path).
+				Str("method", c.Request.Method).
+				Msg("API key scope validation failed - none of required scopes present")
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
 				"error":           "Insufficient scope",
 				"required_scopes": scopes,
@@ -73,7 +115,18 @@ func (m *ScopeMiddleware) RequireAnyScope(scopes ...string) gin.HandlerFunc {
 			return
 		}
 
-		if !apiKey.IsIPAllowed(c.ClientIP()) {
+		ipResult := apiKey.CheckIPAllowed(c.ClientIP())
+		if !ipResult.Allowed {
+			logEvent := m.logger.Warn().
+				Str("api_key_id", apiKey.ID).
+				Str("client_ip", c.ClientIP()).
+				Any("ip_whitelist", apiKey.IPWhitelist).
+				Str("path", c.Request.URL.Path).
+				Str("reason", ipResult.Reason)
+			if ipResult.ParseError {
+				logEvent.Bool("parse_error", true)
+			}
+			logEvent.Msg("API key IP whitelist validation failed")
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
 				"error": "IP address not allowed for this API key",
 			})
@@ -81,6 +134,11 @@ func (m *ScopeMiddleware) RequireAnyScope(scopes ...string) gin.HandlerFunc {
 		}
 
 		if apiKey.ReadOnly && !isReadOnlyMethod(c.Request.Method) {
+			m.logger.Warn().
+				Str("api_key_id", apiKey.ID).
+				Str("method", c.Request.Method).
+				Str("path", c.Request.URL.Path).
+				Msg("API key read-only restriction violated")
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
 				"error": "API key is read-only",
 			})
@@ -106,6 +164,12 @@ func (m *ScopeMiddleware) RequireServerAccess() gin.HandlerFunc {
 		}
 
 		if serverID != "" && !apiKey.IsServerAllowed(serverID) {
+			m.logger.Warn().
+				Str("api_key_id", apiKey.ID).
+				Str("server_id", serverID).
+				Any("allowed_servers", apiKey.AllowedServers).
+				Str("path", c.Request.URL.Path).
+				Msg("API key server access denied")
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
 				"error":     "API key not authorized for this server",
 				"server_id": serverID,
@@ -134,6 +198,12 @@ func (m *ScopeMiddleware) RequireNamespaceAccess() gin.HandlerFunc {
 		// Only check if we have a namespace ID and it's for namespace routes
 		if namespaceID != "" && strings.Contains(c.FullPath(), "namespace") {
 			if !apiKey.IsNamespaceAllowed(namespaceID) {
+				m.logger.Warn().
+					Str("api_key_id", apiKey.ID).
+					Str("namespace_id", namespaceID).
+					Any("allowed_namespaces", apiKey.Namespaces).
+					Str("path", c.Request.URL.Path).
+					Msg("API key namespace access denied")
 				c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
 					"error":        "API key not authorized for this namespace",
 					"namespace_id": namespaceID,

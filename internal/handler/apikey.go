@@ -46,6 +46,27 @@ type apiKeyRepoAdapter struct {
 	repo *repository.APIKeyRepository
 }
 
+// mapRepoKeyToAPIKey converts a repository API key to a handler API key.
+// This helper reduces code duplication across adapter methods.
+func mapRepoKeyToAPIKey(key *repository.APIKey) *APIKey {
+	return &APIKey{
+		ID:             key.ID,
+		UserID:         key.UserID,
+		Name:           key.Name,
+		Description:    key.Description,
+		KeyPrefix:      key.KeyPrefix,
+		ExpiresAt:      key.ExpiresAt,
+		LastUsedAt:     key.LastUsedAt,
+		CreatedAt:      key.CreatedAt,
+		Scopes:         key.Scopes,
+		AllowedServers: key.AllowedServers,
+		AllowedTools:   key.AllowedTools,
+		Namespaces:     key.Namespaces,
+		IPWhitelist:    key.IPWhitelist,
+		ReadOnly:       key.ReadOnly,
+	}
+}
+
 func (a *apiKeyRepoAdapter) Create(ctx context.Context, input *CreateAPIKeyInput) (*APIKey, string, error) {
 	repoInput := &repository.CreateAPIKeyInput{
 		UserID:         input.UserID,
@@ -65,22 +86,7 @@ func (a *apiKeyRepoAdapter) Create(ctx context.Context, input *CreateAPIKeyInput
 		return nil, "", err
 	}
 
-	return &APIKey{
-		ID:             key.ID,
-		UserID:         key.UserID,
-		Name:           key.Name,
-		Description:    key.Description,
-		KeyPrefix:      key.KeyPrefix,
-		ExpiresAt:      key.ExpiresAt,
-		LastUsedAt:     key.LastUsedAt,
-		CreatedAt:      key.CreatedAt,
-		Scopes:         key.Scopes,
-		AllowedServers: key.AllowedServers,
-		AllowedTools:   key.AllowedTools,
-		Namespaces:     key.Namespaces,
-		IPWhitelist:    key.IPWhitelist,
-		ReadOnly:       key.ReadOnly,
-	}, plainKey, nil
+	return mapRepoKeyToAPIKey(key), plainKey, nil
 }
 
 func (a *apiKeyRepoAdapter) GetByID(ctx context.Context, keyID string) (*APIKey, error) {
@@ -89,22 +95,7 @@ func (a *apiKeyRepoAdapter) GetByID(ctx context.Context, keyID string) (*APIKey,
 		return nil, err
 	}
 
-	return &APIKey{
-		ID:             key.ID,
-		UserID:         key.UserID,
-		Name:           key.Name,
-		Description:    key.Description,
-		KeyPrefix:      key.KeyPrefix,
-		ExpiresAt:      key.ExpiresAt,
-		LastUsedAt:     key.LastUsedAt,
-		CreatedAt:      key.CreatedAt,
-		Scopes:         key.Scopes,
-		AllowedServers: key.AllowedServers,
-		AllowedTools:   key.AllowedTools,
-		Namespaces:     key.Namespaces,
-		IPWhitelist:    key.IPWhitelist,
-		ReadOnly:       key.ReadOnly,
-	}, nil
+	return mapRepoKeyToAPIKey(key), nil
 }
 
 func (a *apiKeyRepoAdapter) GetByHash(ctx context.Context, keyHash string) (*APIKey, error) {
@@ -113,22 +104,7 @@ func (a *apiKeyRepoAdapter) GetByHash(ctx context.Context, keyHash string) (*API
 		return nil, err
 	}
 
-	return &APIKey{
-		ID:             key.ID,
-		UserID:         key.UserID,
-		Name:           key.Name,
-		Description:    key.Description,
-		KeyPrefix:      key.KeyPrefix,
-		ExpiresAt:      key.ExpiresAt,
-		LastUsedAt:     key.LastUsedAt,
-		CreatedAt:      key.CreatedAt,
-		Scopes:         key.Scopes,
-		AllowedServers: key.AllowedServers,
-		AllowedTools:   key.AllowedTools,
-		Namespaces:     key.Namespaces,
-		IPWhitelist:    key.IPWhitelist,
-		ReadOnly:       key.ReadOnly,
-	}, nil
+	return mapRepoKeyToAPIKey(key), nil
 }
 
 func (a *apiKeyRepoAdapter) ListByUser(ctx context.Context, userID string) ([]*APIKey, error) {
@@ -138,22 +114,7 @@ func (a *apiKeyRepoAdapter) ListByUser(ctx context.Context, userID string) ([]*A
 	}
 	result := make([]*APIKey, len(keys))
 	for i, key := range keys {
-		result[i] = &APIKey{
-			ID:             key.ID,
-			UserID:         key.UserID,
-			Name:           key.Name,
-			Description:    key.Description,
-			KeyPrefix:      key.KeyPrefix,
-			ExpiresAt:      key.ExpiresAt,
-			LastUsedAt:     key.LastUsedAt,
-			CreatedAt:      key.CreatedAt,
-			Scopes:         key.Scopes,
-			AllowedServers: key.AllowedServers,
-			AllowedTools:   key.AllowedTools,
-			Namespaces:     key.Namespaces,
-			IPWhitelist:    key.IPWhitelist,
-			ReadOnly:       key.ReadOnly,
-		}
+		result[i] = mapRepoKeyToAPIKey(key)
 	}
 
 	return result, nil
