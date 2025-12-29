@@ -1,64 +1,83 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import rolesService from './roles'
-
-// Mock the api module
-vi.mock('./api', () => ({
-  default: {
-    get: vi.fn()
-  }
-}))
-
+import rolesApi from './roles'
 import api from './api'
 
-describe('roles service', () => {
+vi.mock('./api')
+
+describe('rolesApi', () => {
   beforeEach(() => {
     vi.clearAllMocks()
   })
 
   describe('list', () => {
-    it('returns roles from API when available', async () => {
-      const mockRoles = [
-        { id: '1', name: 'admin' },
-        { id: '2', name: 'viewer' }
-      ]
-      vi.mocked(api.get).mockResolvedValue({ roles: mockRoles })
+    it('should call api.get with correct endpoint', async () => {
+      const mockResponse = { roles: [{ id: '1', name: 'admin' }] }
+      vi.mocked(api.get).mockResolvedValue(mockResponse)
 
-      const result = await rolesService.list()
+      const result = await rolesApi.list()
 
-      expect(api.get).toHaveBeenCalledWith('/roles')
-      expect(result).toEqual(mockRoles)
+      expect(api.get).toHaveBeenCalledWith('/admin/roles')
+      expect(result).toEqual(mockResponse)
     })
+  })
 
-    it('returns roles array directly when response is array', async () => {
-      const mockRoles = [
-        { id: '1', name: 'admin' },
-        { id: '2', name: 'viewer' }
-      ]
-      vi.mocked(api.get).mockResolvedValue(mockRoles)
+  describe('getById', () => {
+    it('should call api.get with correct path', async () => {
+      const mockRole = { id: 'role-1', name: 'admin', permissions: [] }
+      vi.mocked(api.get).mockResolvedValue(mockRole)
 
-      const result = await rolesService.list()
+      const result = await rolesApi.getById('role-1')
 
-      expect(result).toEqual(mockRoles)
+      expect(api.get).toHaveBeenCalledWith('/admin/roles/role-1')
+      expect(result).toEqual(mockRole)
     })
+  })
 
-    it('returns default roles on 404 error', async () => {
-      const error = { response: { status: 404 } }
-      vi.mocked(api.get).mockRejectedValue(error)
+  describe('create', () => {
+    it('should call api.post with role data', async () => {
+      const roleData = { name: 'custom-role', description: 'A custom role', permissions: ['read'] }
+      const mockResponse = { id: 'new-role', ...roleData }
+      vi.mocked(api.post).mockResolvedValue(mockResponse)
 
-      const result = await rolesService.list()
+      const result = await rolesApi.create(roleData)
 
-      expect(result).toEqual([
-        { id: 'admin', name: 'admin', description: 'Full administrative access' },
-        { id: 'operator', name: 'operator', description: 'Server management access' },
-        { id: 'viewer', name: 'viewer', description: 'Read-only access' }
-      ])
+      expect(api.post).toHaveBeenCalledWith('/admin/roles', roleData)
+      expect(result).toEqual(mockResponse)
     })
+  })
 
-    it('throws error on non-404 errors', async () => {
-      const error = { response: { status: 500 }, message: 'Server error' }
-      vi.mocked(api.get).mockRejectedValue(error)
+  describe('update', () => {
+    it('should call api.put with correct path and data', async () => {
+      const roleData = { description: 'Updated description' }
+      const mockResponse = { id: 'role-1', name: 'admin', ...roleData }
+      vi.mocked(api.put).mockResolvedValue(mockResponse)
 
-      await expect(rolesService.list()).rejects.toEqual(error)
+      const result = await rolesApi.update('role-1', roleData)
+
+      expect(api.put).toHaveBeenCalledWith('/admin/roles/role-1', roleData)
+      expect(result).toEqual(mockResponse)
+    })
+  })
+
+  describe('delete', () => {
+    it('should call api.delete with correct path', async () => {
+      vi.mocked(api.delete).mockResolvedValue(undefined)
+
+      await rolesApi.delete('role-1')
+
+      expect(api.delete).toHaveBeenCalledWith('/admin/roles/role-1')
+    })
+  })
+
+  describe('listPermissions', () => {
+    it('should call api.get for permissions endpoint', async () => {
+      const mockResponse = { permissions: [{ id: 'read', name: 'Read' }] }
+      vi.mocked(api.get).mockResolvedValue(mockResponse)
+
+      const result = await rolesApi.listPermissions()
+
+      expect(api.get).toHaveBeenCalledWith('/admin/permissions')
+      expect(result).toEqual(mockResponse)
     })
   })
 })

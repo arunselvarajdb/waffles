@@ -2,7 +2,8 @@ import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import LoginView from '@/views/LoginView.vue'
 import AdminDashboard from '@/views/AdminDashboard.vue'
-import UserManagement from '@/views/UserManagement.vue'
+import AdminUsers from '@/views/AdminUsers.vue'
+import AdminRoles from '@/views/AdminRoles.vue'
 import ServerInspector from '@/views/ServerInspector.vue'
 import ViewerDashboard from '@/views/ViewerDashboard.vue'
 import NamespacesDashboard from '@/views/NamespacesDashboard.vue'
@@ -26,8 +27,14 @@ const routes = [
   },
   {
     path: '/admin/users',
-    name: 'UserManagement',
-    component: UserManagement,
+    name: 'AdminUsers',
+    component: AdminUsers,
+    meta: { requiresAuth: true, requiresAdmin: true }
+  },
+  {
+    path: '/admin/roles',
+    name: 'AdminRoles',
+    component: AdminRoles,
     meta: { requiresAuth: true, requiresAdmin: true }
   },
   {
