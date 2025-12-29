@@ -46,20 +46,40 @@ type apiKeyRepoAdapter struct {
 	repo *repository.APIKeyRepository
 }
 
-func (a *apiKeyRepoAdapter) Create(ctx context.Context, userID, name string, expiresAt *time.Time) (*APIKey, string, error) {
-	key, plainKey, err := a.repo.Create(ctx, userID, name, expiresAt)
+func (a *apiKeyRepoAdapter) Create(ctx context.Context, input *CreateAPIKeyInput) (*APIKey, string, error) {
+	repoInput := &repository.CreateAPIKeyInput{
+		UserID:         input.UserID,
+		Name:           input.Name,
+		Description:    input.Description,
+		ExpiresAt:      input.ExpiresAt,
+		Scopes:         input.Scopes,
+		AllowedServers: input.AllowedServers,
+		AllowedTools:   input.AllowedTools,
+		Namespaces:     input.Namespaces,
+		IPWhitelist:    input.IPWhitelist,
+		ReadOnly:       input.ReadOnly,
+	}
+
+	key, plainKey, err := a.repo.Create(ctx, repoInput)
 	if err != nil {
 		return nil, "", err
 	}
 
 	return &APIKey{
-		ID:         key.ID,
-		UserID:     key.UserID,
-		Name:       key.Name,
-		KeyPrefix:  key.KeyPrefix,
-		ExpiresAt:  key.ExpiresAt,
-		LastUsedAt: key.LastUsedAt,
-		CreatedAt:  key.CreatedAt,
+		ID:             key.ID,
+		UserID:         key.UserID,
+		Name:           key.Name,
+		Description:    key.Description,
+		KeyPrefix:      key.KeyPrefix,
+		ExpiresAt:      key.ExpiresAt,
+		LastUsedAt:     key.LastUsedAt,
+		CreatedAt:      key.CreatedAt,
+		Scopes:         key.Scopes,
+		AllowedServers: key.AllowedServers,
+		AllowedTools:   key.AllowedTools,
+		Namespaces:     key.Namespaces,
+		IPWhitelist:    key.IPWhitelist,
+		ReadOnly:       key.ReadOnly,
 	}, plainKey, nil
 }
 
@@ -70,13 +90,20 @@ func (a *apiKeyRepoAdapter) GetByID(ctx context.Context, keyID string) (*APIKey,
 	}
 
 	return &APIKey{
-		ID:         key.ID,
-		UserID:     key.UserID,
-		Name:       key.Name,
-		KeyPrefix:  key.KeyPrefix,
-		ExpiresAt:  key.ExpiresAt,
-		LastUsedAt: key.LastUsedAt,
-		CreatedAt:  key.CreatedAt,
+		ID:             key.ID,
+		UserID:         key.UserID,
+		Name:           key.Name,
+		Description:    key.Description,
+		KeyPrefix:      key.KeyPrefix,
+		ExpiresAt:      key.ExpiresAt,
+		LastUsedAt:     key.LastUsedAt,
+		CreatedAt:      key.CreatedAt,
+		Scopes:         key.Scopes,
+		AllowedServers: key.AllowedServers,
+		AllowedTools:   key.AllowedTools,
+		Namespaces:     key.Namespaces,
+		IPWhitelist:    key.IPWhitelist,
+		ReadOnly:       key.ReadOnly,
 	}, nil
 }
 
@@ -87,13 +114,20 @@ func (a *apiKeyRepoAdapter) GetByHash(ctx context.Context, keyHash string) (*API
 	}
 
 	return &APIKey{
-		ID:         key.ID,
-		UserID:     key.UserID,
-		Name:       key.Name,
-		KeyPrefix:  key.KeyPrefix,
-		ExpiresAt:  key.ExpiresAt,
-		LastUsedAt: key.LastUsedAt,
-		CreatedAt:  key.CreatedAt,
+		ID:             key.ID,
+		UserID:         key.UserID,
+		Name:           key.Name,
+		Description:    key.Description,
+		KeyPrefix:      key.KeyPrefix,
+		ExpiresAt:      key.ExpiresAt,
+		LastUsedAt:     key.LastUsedAt,
+		CreatedAt:      key.CreatedAt,
+		Scopes:         key.Scopes,
+		AllowedServers: key.AllowedServers,
+		AllowedTools:   key.AllowedTools,
+		Namespaces:     key.Namespaces,
+		IPWhitelist:    key.IPWhitelist,
+		ReadOnly:       key.ReadOnly,
 	}, nil
 }
 
@@ -105,13 +139,20 @@ func (a *apiKeyRepoAdapter) ListByUser(ctx context.Context, userID string) ([]*A
 	result := make([]*APIKey, len(keys))
 	for i, key := range keys {
 		result[i] = &APIKey{
-			ID:         key.ID,
-			UserID:     key.UserID,
-			Name:       key.Name,
-			KeyPrefix:  key.KeyPrefix,
-			ExpiresAt:  key.ExpiresAt,
-			LastUsedAt: key.LastUsedAt,
-			CreatedAt:  key.CreatedAt,
+			ID:             key.ID,
+			UserID:         key.UserID,
+			Name:           key.Name,
+			Description:    key.Description,
+			KeyPrefix:      key.KeyPrefix,
+			ExpiresAt:      key.ExpiresAt,
+			LastUsedAt:     key.LastUsedAt,
+			CreatedAt:      key.CreatedAt,
+			Scopes:         key.Scopes,
+			AllowedServers: key.AllowedServers,
+			AllowedTools:   key.AllowedTools,
+			Namespaces:     key.Namespaces,
+			IPWhitelist:    key.IPWhitelist,
+			ReadOnly:       key.ReadOnly,
 		}
 	}
 
@@ -128,8 +169,15 @@ func (a *apiKeyRepoAdapter) UpdateLastUsed(ctx context.Context, keyID string) er
 
 // CreateAPIKeyRequest represents the create API key request body
 type CreateAPIKeyRequest struct {
-	Name      string `json:"name" binding:"required,min=1,max=255"`
-	ExpiresIn *int   `json:"expires_in_days"` // Optional: number of days until expiry
+	Name           string   `json:"name" binding:"required,min=1,max=255"`
+	Description    string   `json:"description,omitempty"`
+	ExpiresIn      *int     `json:"expires_in_days,omitempty"` // Optional: number of days until expiry
+	Scopes         []string `json:"scopes,omitempty"`          // Permission scopes
+	AllowedServers []string `json:"allowed_servers,omitempty"` // Server UUIDs (empty = all)
+	AllowedTools   []string `json:"allowed_tools,omitempty"`   // Tool names (empty = all)
+	Namespaces     []string `json:"namespaces,omitempty"`      // Namespace UUIDs (empty = all)
+	IPWhitelist    []string `json:"ip_whitelist,omitempty"`    // CIDR ranges (empty = any)
+	ReadOnly       bool     `json:"read_only,omitempty"`       // Only allow read operations
 }
 
 // CreateAPIKeyResponse represents the create API key response
@@ -180,8 +228,33 @@ func (h *APIKeyHandler) CreateAPIKey(c *gin.Context) {
 		expiresAt = &expiry
 	}
 
+	// Validate scopes if provided
+	for _, scope := range req.Scopes {
+		if !domain.IsValidScope(scope) {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error":   "validation_error",
+				"message": "Invalid scope: " + scope,
+			})
+			return
+		}
+	}
+
+	// Create API key input
+	input := &CreateAPIKeyInput{
+		UserID:         userID,
+		Name:           req.Name,
+		Description:    req.Description,
+		ExpiresAt:      expiresAt,
+		Scopes:         req.Scopes,
+		AllowedServers: req.AllowedServers,
+		AllowedTools:   req.AllowedTools,
+		Namespaces:     req.Namespaces,
+		IPWhitelist:    req.IPWhitelist,
+		ReadOnly:       req.ReadOnly,
+	}
+
 	// Create API key
-	apiKey, plainKey, err := h.apiKeyRepo.Create(c.Request.Context(), userID, req.Name, expiresAt)
+	apiKey, plainKey, err := h.apiKeyRepo.Create(c.Request.Context(), input)
 	if err != nil {
 		h.logger.Error().Err(err).Str("user_id", userID).Msg("Failed to create API key")
 		c.JSON(http.StatusInternalServerError, gin.H{

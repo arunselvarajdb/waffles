@@ -7,6 +7,7 @@ import AdminRoles from '@/views/AdminRoles.vue'
 import ServerInspector from '@/views/ServerInspector.vue'
 import ViewerDashboard from '@/views/ViewerDashboard.vue'
 import NamespacesDashboard from '@/views/NamespacesDashboard.vue'
+import ApiKeys from '@/views/ApiKeys.vue'
 
 const routes = [
   {
@@ -53,6 +54,12 @@ const routes = [
     path: '/dashboard',
     name: 'ViewerDashboard',
     component: ViewerDashboard,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/settings/api-keys',
+    name: 'ApiKeys',
+    component: ApiKeys,
     meta: { requiresAuth: true }
   }
 ]

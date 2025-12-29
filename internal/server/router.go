@@ -126,6 +126,9 @@ func (s *Server) SetupRoutes() {
 		}
 	}
 
+	// Scope middleware for API key restriction enforcement
+	scopeMiddleware := middleware.NewScopeMiddleware()
+
 	// Check if authentication is enabled
 	authEnabled := s.config.Auth.Enabled
 
@@ -195,17 +198,21 @@ func (s *Server) SetupRoutes() {
 			if authEnabled && authzConfig != nil {
 				servers.Use(middleware.Authz(authzConfig))
 			}
+			// Apply scope middleware for API key restrictions
+			servers.Use(scopeMiddleware.CheckReadOnly())
+			servers.Use(scopeMiddleware.CheckIPWhitelist())
+			servers.Use(scopeMiddleware.RequireServerAccess())
 			{
-				servers.GET("", registryHandler.ListServers)
-				servers.POST("", registryHandler.CreateServer)
-				servers.POST("/test-connection", registryHandler.TestConnection) // Test connection without saving
-				servers.POST("/call-tool", registryHandler.CallTool)             // Call tool for inspection
-				servers.GET("/:id", registryHandler.GetServer)
-				servers.PUT("/:id", registryHandler.UpdateServer)
-				servers.DELETE("/:id", registryHandler.DeleteServer)
-				servers.PATCH("/:id/toggle", registryHandler.ToggleServer)
-				servers.GET("/:id/health", registryHandler.GetHealthStatus)
-				servers.POST("/:id/health", registryHandler.CheckHealth)
+				servers.GET("", scopeMiddleware.RequireScope("servers:read"), registryHandler.ListServers)
+				servers.POST("", scopeMiddleware.RequireScope("servers:write"), registryHandler.CreateServer)
+				servers.POST("/test-connection", scopeMiddleware.RequireScope("servers:write"), registryHandler.TestConnection) // Test connection without saving
+				servers.POST("/call-tool", scopeMiddleware.RequireScope("gateway:execute"), registryHandler.CallTool)           // Call tool for inspection
+				servers.GET("/:id", scopeMiddleware.RequireScope("servers:read"), registryHandler.GetServer)
+				servers.PUT("/:id", scopeMiddleware.RequireScope("servers:write"), registryHandler.UpdateServer)
+				servers.DELETE("/:id", scopeMiddleware.RequireScope("servers:write"), registryHandler.DeleteServer)
+				servers.PATCH("/:id/toggle", scopeMiddleware.RequireScope("servers:write"), registryHandler.ToggleServer)
+				servers.GET("/:id/health", scopeMiddleware.RequireScope("servers:read"), registryHandler.GetHealthStatus)
+				servers.POST("/:id/health", scopeMiddleware.RequireScope("servers:read"), registryHandler.CheckHealth)
 			}
 
 			// MCP Gateway Proxy routes (with audit middleware)
@@ -214,6 +221,11 @@ func (s *Server) SetupRoutes() {
 			if authEnabled && authzConfig != nil {
 				gatewayGroup.Use(middleware.Authz(authzConfig))
 			}
+			// Apply scope middleware for API key restrictions
+			gatewayGroup.Use(scopeMiddleware.RequireScope("gateway:execute"))
+			gatewayGroup.Use(scopeMiddleware.CheckReadOnly())
+			gatewayGroup.Use(scopeMiddleware.CheckIPWhitelist())
+			gatewayGroup.Use(scopeMiddleware.RequireServerAccess())
 			{
 				// Native MCP proxy endpoint - allows MCP clients (Claude Code, etc.) to connect directly
 				// This proxies MCP JSON-RPC requests to the backend server
@@ -234,22 +246,26 @@ func (s *Server) SetupRoutes() {
 			if authEnabled && authzConfig != nil {
 				namespaces.Use(middleware.Authz(authzConfig))
 			}
+			// Apply scope middleware for API key restrictions
+			namespaces.Use(scopeMiddleware.CheckReadOnly())
+			namespaces.Use(scopeMiddleware.CheckIPWhitelist())
+			namespaces.Use(scopeMiddleware.RequireNamespaceAccess())
 			{
-				namespaces.GET("", namespaceHandler.ListNamespaces)
-				namespaces.POST("", namespaceHandler.CreateNamespace)
-				namespaces.GET("/:id", namespaceHandler.GetNamespace)
-				namespaces.PUT("/:id", namespaceHandler.UpdateNamespace)
-				namespaces.DELETE("/:id", namespaceHandler.DeleteNamespace)
+				namespaces.GET("", scopeMiddleware.RequireScope("namespaces:read"), namespaceHandler.ListNamespaces)
+				namespaces.POST("", scopeMiddleware.RequireScope("namespaces:write"), namespaceHandler.CreateNamespace)
+				namespaces.GET("/:id", scopeMiddleware.RequireScope("namespaces:read"), namespaceHandler.GetNamespace)
+				namespaces.PUT("/:id", scopeMiddleware.RequireScope("namespaces:write"), namespaceHandler.UpdateNamespace)
+				namespaces.DELETE("/:id", scopeMiddleware.RequireScope("namespaces:write"), namespaceHandler.DeleteNamespace)
 
 				// Server membership management
-				namespaces.GET("/:id/servers", namespaceHandler.ListServers)
-				namespaces.POST("/:id/servers", namespaceHandler.AddServer)
-				namespaces.DELETE("/:id/servers/:server_id", namespaceHandler.RemoveServer)
+				namespaces.GET("/:id/servers", scopeMiddleware.RequireScope("namespaces:read"), namespaceHandler.ListServers)
+				namespaces.POST("/:id/servers", scopeMiddleware.RequireScope("namespaces:write"), namespaceHandler.AddServer)
+				namespaces.DELETE("/:id/servers/:server_id", scopeMiddleware.RequireScope("namespaces:write"), namespaceHandler.RemoveServer)
 
 				// Role access management
-				namespaces.GET("/:id/access", namespaceHandler.ListRoleAccess)
-				namespaces.POST("/:id/access", namespaceHandler.SetRoleAccess)
-				namespaces.DELETE("/:id/access/:role_id", namespaceHandler.RemoveRoleAccess)
+				namespaces.GET("/:id/access", scopeMiddleware.RequireScope("namespaces:read"), namespaceHandler.ListRoleAccess)
+				namespaces.POST("/:id/access", scopeMiddleware.RequireScope("namespaces:write"), namespaceHandler.SetRoleAccess)
+				namespaces.DELETE("/:id/access/:role_id", scopeMiddleware.RequireScope("namespaces:write"), namespaceHandler.RemoveRoleAccess)
 			}
 
 			// Admin routes (admin role required)
@@ -257,6 +273,9 @@ func (s *Server) SetupRoutes() {
 			if authEnabled && authzConfig != nil {
 				adminGroup.Use(middleware.Authz(authzConfig))
 			}
+			// Apply scope middleware for API key restrictions
+			adminGroup.Use(scopeMiddleware.CheckReadOnly())
+			adminGroup.Use(scopeMiddleware.CheckIPWhitelist())
 			{
 				// Initialize admin services
 				userService := user.NewService(userRepo, s.logger)
@@ -270,32 +289,32 @@ func (s *Server) SetupRoutes() {
 				// User management
 				users := adminGroup.Group("/users")
 				{
-					users.GET("", usersHandler.ListUsers)
-					users.POST("", usersHandler.CreateUser)
-					users.GET("/:id", usersHandler.GetUser)
-					users.PUT("/:id", usersHandler.UpdateUser)
-					users.DELETE("/:id", usersHandler.DeleteUser)
-					users.PUT("/:id/roles", usersHandler.UpdateUserRoles)
-					users.POST("/:id/reset-password", usersHandler.ResetPassword)
+					users.GET("", scopeMiddleware.RequireScope("users:read"), usersHandler.ListUsers)
+					users.POST("", scopeMiddleware.RequireScope("users:write"), usersHandler.CreateUser)
+					users.GET("/:id", scopeMiddleware.RequireScope("users:read"), usersHandler.GetUser)
+					users.PUT("/:id", scopeMiddleware.RequireScope("users:write"), usersHandler.UpdateUser)
+					users.DELETE("/:id", scopeMiddleware.RequireScope("users:write"), usersHandler.DeleteUser)
+					users.PUT("/:id/roles", scopeMiddleware.RequireScope("users:write"), usersHandler.UpdateUserRoles)
+					users.POST("/:id/reset-password", scopeMiddleware.RequireScope("users:write"), usersHandler.ResetPassword)
 
 					// Session management
-					users.GET("/:id/sessions", sessionsHandler.ListUserSessions)
-					users.DELETE("/:id/sessions", sessionsHandler.RevokeAllUserSessions)
-					users.DELETE("/:id/sessions/:sid", sessionsHandler.RevokeSession)
+					users.GET("/:id/sessions", scopeMiddleware.RequireScope("users:read"), sessionsHandler.ListUserSessions)
+					users.DELETE("/:id/sessions", scopeMiddleware.RequireScope("users:write"), sessionsHandler.RevokeAllUserSessions)
+					users.DELETE("/:id/sessions/:sid", scopeMiddleware.RequireScope("users:write"), sessionsHandler.RevokeSession)
 				}
 
 				// Role management
 				roles := adminGroup.Group("/roles")
 				{
-					roles.GET("", rolesHandler.ListRoles)
-					roles.POST("", rolesHandler.CreateRole)
-					roles.GET("/:id", rolesHandler.GetRole)
-					roles.PUT("/:id", rolesHandler.UpdateRole)
-					roles.DELETE("/:id", rolesHandler.DeleteRole)
+					roles.GET("", scopeMiddleware.RequireScope("roles:read"), rolesHandler.ListRoles)
+					roles.POST("", scopeMiddleware.RequireScope("roles:write"), rolesHandler.CreateRole)
+					roles.GET("/:id", scopeMiddleware.RequireScope("roles:read"), rolesHandler.GetRole)
+					roles.PUT("/:id", scopeMiddleware.RequireScope("roles:write"), rolesHandler.UpdateRole)
+					roles.DELETE("/:id", scopeMiddleware.RequireScope("roles:write"), rolesHandler.DeleteRole)
 				}
 
 				// Permissions (read-only)
-				adminGroup.GET("/permissions", rolesHandler.ListPermissions)
+				adminGroup.GET("/permissions", scopeMiddleware.RequireScope("roles:read"), rolesHandler.ListPermissions)
 			}
 		}
 	}

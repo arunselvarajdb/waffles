@@ -23,7 +23,7 @@ import (
 
 type mockAPIKeyRepo struct {
 	keys           map[string]*APIKey
-	createFunc     func(ctx context.Context, userID, name string, expiresAt *time.Time) (*APIKey, string, error)
+	createFunc     func(ctx context.Context, input *CreateAPIKeyInput) (*APIKey, string, error)
 	getByIDFunc    func(ctx context.Context, keyID string) (*APIKey, error)
 	listByUserFunc func(ctx context.Context, userID string) ([]*APIKey, error)
 	deleteFunc     func(ctx context.Context, keyID, userID string) error
@@ -35,17 +35,24 @@ func newMockAPIKeyRepo() *mockAPIKeyRepo {
 	}
 }
 
-func (m *mockAPIKeyRepo) Create(ctx context.Context, userID, name string, expiresAt *time.Time) (*APIKey, string, error) {
+func (m *mockAPIKeyRepo) Create(ctx context.Context, input *CreateAPIKeyInput) (*APIKey, string, error) {
 	if m.createFunc != nil {
-		return m.createFunc(ctx, userID, name, expiresAt)
+		return m.createFunc(ctx, input)
 	}
 	key := &APIKey{
-		ID:        "key-" + name,
-		UserID:    userID,
-		Name:      name,
-		KeyPrefix: "mcpgw_abc",
-		ExpiresAt: expiresAt,
-		CreatedAt: time.Now(),
+		ID:             "key-" + input.Name,
+		UserID:         input.UserID,
+		Name:           input.Name,
+		Description:    input.Description,
+		KeyPrefix:      "mcpgw_abc",
+		ExpiresAt:      input.ExpiresAt,
+		CreatedAt:      time.Now(),
+		Scopes:         input.Scopes,
+		AllowedServers: input.AllowedServers,
+		AllowedTools:   input.AllowedTools,
+		Namespaces:     input.Namespaces,
+		IPWhitelist:    input.IPWhitelist,
+		ReadOnly:       input.ReadOnly,
 	}
 	m.keys[key.ID] = key
 
@@ -192,7 +199,7 @@ func TestAPIKeyHandler_CreateAPIKey(t *testing.T) {
 
 	t.Run("repository error", func(t *testing.T) {
 		mockRepo := newMockAPIKeyRepo()
-		mockRepo.createFunc = func(ctx context.Context, userID, name string, expiresAt *time.Time) (*APIKey, string, error) {
+		mockRepo.createFunc = func(ctx context.Context, input *CreateAPIKeyInput) (*APIKey, string, error) {
 			return nil, "", errors.New("database error")
 		}
 		handler := NewAPIKeyHandlerWithInterface(mockRepo, log)

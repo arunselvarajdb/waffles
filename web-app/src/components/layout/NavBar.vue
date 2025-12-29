@@ -44,8 +44,15 @@
           </div>
         </div>
 
-        <!-- Right side: User Info and Logout -->
+        <!-- Right side: API Keys, User Info and Logout -->
         <div class="flex-shrink-0 flex items-center space-x-4">
+          <router-link
+            to="/settings/api-keys"
+            class="text-sm text-gray-500 hover:text-gray-700 transition-colors"
+            :class="isActive('/settings/api-keys') ? 'text-blue-600 font-medium' : ''"
+          >
+            API Keys
+          </router-link>
           <span v-if="userEmail" class="text-sm text-gray-700 whitespace-nowrap">{{ userEmail }}</span>
           <button
             @click="handleLogout"
