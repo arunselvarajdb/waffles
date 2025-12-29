@@ -151,10 +151,8 @@ const getRoleBadgeVariant = (role) => {
       return 'danger'
     case 'operator':
       return 'warning'
-    case 'user':
+    case 'viewer':
       return 'info'
-    case 'readonly':
-      return 'secondary'
     default:
       return 'secondary'
   }

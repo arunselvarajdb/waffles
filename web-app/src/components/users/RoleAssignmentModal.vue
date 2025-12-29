@@ -109,17 +109,12 @@ const availableRoles = [
   {
     name: 'operator',
     label: 'Operator',
-    description: 'Can manage servers and view all data'
+    description: 'Can manage servers and gateway, view audit logs'
   },
   {
-    name: 'user',
-    label: 'User',
-    description: 'Standard access to assigned servers'
-  },
-  {
-    name: 'readonly',
-    label: 'Read Only',
-    description: 'Can only view data, no modifications allowed'
+    name: 'viewer',
+    label: 'Viewer',
+    description: 'Read-only access to servers and health info'
   }
 ]
 

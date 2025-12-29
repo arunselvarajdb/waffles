@@ -40,8 +40,7 @@
           <option value="all">All Roles</option>
           <option value="admin">Admin</option>
           <option value="operator">Operator</option>
-          <option value="user">User</option>
-          <option value="readonly">Read Only</option>
+          <option value="viewer">Viewer</option>
         </select>
       </div>
 
