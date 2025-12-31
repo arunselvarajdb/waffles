@@ -77,8 +77,13 @@
             </div>
 
             <div class="bg-blue-50 rounded-lg p-3 text-xs text-blue-700">
-              <strong>Note:</strong> Replace <code class="bg-blue-100 px-1 rounded">your-api-key</code> with your actual API key from the gateway.
-              You can create API keys in the Settings page.
+              <strong>How to get your API key:</strong>
+              <ol class="mt-2 list-decimal list-inside space-y-1">
+                <li>Go to <a href="/profile?tab=api-keys" class="text-blue-600 hover:underline font-medium">Account Settings → API Keys</a></li>
+                <li>Click "Create API Key" and give it a name</li>
+                <li>Copy the key (it's only shown once!)</li>
+                <li>Replace <code class="bg-blue-100 px-1 rounded">your-api-key</code> in the config above</li>
+              </ol>
             </div>
           </div>
         </div>
@@ -120,8 +125,13 @@
                 <pre class="text-xs text-green-400 font-mono overflow-x-auto whitespace-pre-wrap">{{ cursorConfig }}</pre>
               </div>
               <div class="bg-blue-50 rounded-lg p-3 text-xs text-blue-700 mt-2">
-                <strong>Note:</strong> Replace <code class="bg-blue-100 px-1 rounded">your-api-key</code> with your actual API key.
-                Restart Cursor after updating the configuration.
+                <strong>How to get your API key:</strong>
+                <ol class="mt-2 list-decimal list-inside space-y-1">
+                  <li>Go to <a href="/profile?tab=api-keys" class="text-blue-600 hover:underline font-medium">Account Settings → API Keys</a></li>
+                  <li>Click "Create API Key" and give it a name</li>
+                  <li>Copy the key and replace <code class="bg-blue-100 px-1 rounded">your-api-key</code> above</li>
+                  <li>Restart Cursor after updating the configuration</li>
+                </ol>
               </div>
             </div>
           </div>
@@ -144,8 +154,13 @@
               <pre class="text-xs text-green-400 font-mono overflow-x-auto whitespace-pre-wrap">{{ vscodeConfig }}</pre>
             </div>
             <div class="bg-blue-50 rounded-lg p-3 text-xs text-blue-700">
-              <strong>Note:</strong> Requires a VS Code extension that supports MCP (like Cline or Continue).
-              Check your extension's documentation for the correct configuration format.
+              <strong>Setup Instructions:</strong>
+              <ol class="mt-2 list-decimal list-inside space-y-1">
+                <li>Install a VS Code extension that supports MCP (like Cline or Continue)</li>
+                <li>Go to <a href="/profile?tab=api-keys" class="text-blue-600 hover:underline font-medium">Account Settings → API Keys</a> to create an API key</li>
+                <li>Copy the key and replace <code class="bg-blue-100 px-1 rounded">your-api-key</code> above</li>
+                <li>Check your extension's documentation for the exact config location</li>
+              </ol>
             </div>
           </div>
         </div>
@@ -154,18 +169,24 @@
       <!-- Authentication Info -->
       <div class="bg-yellow-50 rounded-lg p-4 border border-yellow-100">
         <div class="flex items-start gap-2">
-          <svg class="h-5 w-5 text-yellow-600 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg class="h-5 w-5 text-yellow-600 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
           </svg>
           <div>
             <h4 class="text-sm font-medium text-yellow-800">Authentication Required</h4>
             <p class="text-xs text-yellow-700 mt-1">
-              All gateway endpoints require authentication. Use either:
+              All gateway endpoints require authentication. For MCP clients, use an API key:
             </p>
             <ul class="text-xs text-yellow-700 mt-2 list-disc list-inside space-y-1">
-              <li><strong>Session Cookie:</strong> Log in via <code class="bg-yellow-100 px-1 rounded">/api/v1/auth/login</code></li>
-              <li><strong>API Key:</strong> Pass <code class="bg-yellow-100 px-1 rounded">X-API-Key: your-key</code> header</li>
+              <li><strong>API Key (Recommended):</strong> Pass <code class="bg-yellow-100 px-1 rounded">X-API-Key: mcpgw_...</code> header</li>
+              <li><strong>Bearer Token:</strong> Pass <code class="bg-yellow-100 px-1 rounded">Authorization: Bearer mcpgw_...</code></li>
             </ul>
+            <a
+              href="/profile?tab=api-keys"
+              class="inline-flex items-center mt-3 text-xs font-medium text-yellow-800 hover:text-yellow-900 underline"
+            >
+              Create an API Key →
+            </a>
           </div>
         </div>
       </div>

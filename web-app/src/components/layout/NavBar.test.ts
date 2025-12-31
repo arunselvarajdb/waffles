@@ -106,6 +106,7 @@ describe('NavBar', () => {
     expect(wrapper.text()).toContain('Inspector')
     expect(wrapper.text()).toContain('Users')
     expect(wrapper.text()).toContain('Namespaces')
+    expect(wrapper.text()).toContain('Service Accounts')
   })
 
   it('hides navigation links for non-admin users', () => {
@@ -124,12 +125,62 @@ describe('NavBar', () => {
     expect(wrapper.find('.sm\\:flex.sm\\:space-x-8').exists()).toBe(false)
   })
 
-  it('has logout button', () => {
+  it('has user dropdown menu with profile links', async () => {
+    const wrapper = mount(NavBar, {
+      global: {
+        stubs: {
+          RouterLink: {
+            template: '<a><slot /></a>'
+          }
+        }
+      }
+    })
+
+    // Click to open dropdown
+    const dropdownButton = wrapper.find('.flex.items-center.space-x-2')
+    await dropdownButton.trigger('click')
+
+    // Check dropdown content
+    expect(wrapper.text()).toContain('Profile')
+    expect(wrapper.text()).toContain('API Keys')
+    expect(wrapper.text()).toContain('Security')
+    expect(wrapper.text()).toContain('Logout')
+  })
+
+  it('toggles user menu on click', async () => {
     const wrapper = mount(NavBar, {
       global: {
         stubs: { RouterLink: true }
       }
     })
+
+    // Initially dropdown should not be visible
+    expect(wrapper.find('.absolute.right-0').exists()).toBe(false)
+
+    // Click to open
+    const dropdownButton = wrapper.find('.flex.items-center.space-x-2')
+    await dropdownButton.trigger('click')
+
+    // Dropdown should now be visible
+    expect(wrapper.find('.absolute.right-0').exists()).toBe(true)
+
+    // Click again to close
+    await dropdownButton.trigger('click')
+
+    // Dropdown should be hidden again
+    expect(wrapper.find('.absolute.right-0').exists()).toBe(false)
+  })
+
+  it('has logout button in user dropdown', async () => {
+    const wrapper = mount(NavBar, {
+      global: {
+        stubs: { RouterLink: true }
+      }
+    })
+    // Open the dropdown first
+    const dropdownButton = wrapper.find('.flex.items-center.space-x-2')
+    await dropdownButton.trigger('click')
+
     expect(wrapper.text()).toContain('Logout')
   })
 
@@ -144,6 +195,10 @@ describe('NavBar', () => {
         stubs: { RouterLink: true }
       }
     })
+
+    // Open the dropdown first
+    const dropdownButton = wrapper.find('.flex.items-center.space-x-2')
+    await dropdownButton.trigger('click')
 
     const logoutButton = wrapper.findAll('button').find(b => b.text() === 'Logout')
     await logoutButton?.trigger('click')

@@ -27,6 +27,7 @@ describe('useAuthStore', () => {
       expect(store.loading).toBe(false)
       expect(store.error).toBeNull()
       expect(store.authEnabled).toBeNull()
+      expect(store.authProvider).toBeNull()
     })
   })
 
@@ -82,6 +83,30 @@ describe('useAuthStore', () => {
 
       store.roles = []
       expect(store.role).toBe('user')
+    })
+
+    it('canChangePassword returns true for local auth', () => {
+      const store = useAuthStore()
+      store.authProvider = 'local'
+      expect(store.canChangePassword).toBe(true)
+    })
+
+    it('canChangePassword returns true for LDAP auth', () => {
+      const store = useAuthStore()
+      store.authProvider = 'ldap'
+      expect(store.canChangePassword).toBe(true)
+    })
+
+    it('canChangePassword returns false for OAuth auth', () => {
+      const store = useAuthStore()
+      store.authProvider = 'oauth'
+      expect(store.canChangePassword).toBe(false)
+    })
+
+    it('canChangePassword returns false when authProvider is null', () => {
+      const store = useAuthStore()
+      store.authProvider = null
+      expect(store.canChangePassword).toBe(false)
     })
   })
 
@@ -215,6 +240,33 @@ describe('useAuthStore', () => {
       expect(api.get).toHaveBeenCalledWith('/status')
       expect(result).toBe(true)
       expect(store.authEnabled).toBe(true)
+    })
+
+    it('sets authProvider from status endpoint', async () => {
+      vi.mocked(api.get).mockResolvedValue({ auth: { enabled: true, provider: 'oauth' } })
+
+      const store = useAuthStore()
+      await store.checkAuthConfig()
+
+      expect(store.authProvider).toBe('oauth')
+    })
+
+    it('sets authProvider to local when provider is local', async () => {
+      vi.mocked(api.get).mockResolvedValue({ auth: { enabled: true, provider: 'local' } })
+
+      const store = useAuthStore()
+      await store.checkAuthConfig()
+
+      expect(store.authProvider).toBe('local')
+    })
+
+    it('sets authProvider to ldap when provider is ldap', async () => {
+      vi.mocked(api.get).mockResolvedValue({ auth: { enabled: true, provider: 'ldap' } })
+
+      const store = useAuthStore()
+      await store.checkAuthConfig()
+
+      expect(store.authProvider).toBe('ldap')
     })
 
     it('defaults to true when status check fails', async () => {

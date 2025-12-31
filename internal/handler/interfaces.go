@@ -31,25 +31,48 @@ type ServerAccessServiceInterface interface {
 	CanAccessServer(ctx context.Context, roles []string, serverID string, level domain.AccessLevel) (bool, error)
 }
 
+// CreateAPIKeyInput contains the parameters for creating a new API key
+type CreateAPIKeyInput struct {
+	UserID         string
+	Name           string
+	Description    string
+	ExpiresAt      *time.Time
+	Scopes         []string
+	AllowedServers []string
+	AllowedTools   []string
+	Namespaces     []string
+	IPWhitelist    []string
+	ReadOnly       bool
+}
+
 // APIKeyRepositoryInterface defines the interface for API key repository operations.
 type APIKeyRepositoryInterface interface {
-	Create(ctx context.Context, userID, name string, expiresAt *time.Time) (*APIKey, string, error)
+	Create(ctx context.Context, input *CreateAPIKeyInput) (*APIKey, string, error)
 	GetByID(ctx context.Context, keyID string) (*APIKey, error)
 	GetByHash(ctx context.Context, keyHash string) (*APIKey, error)
 	ListByUser(ctx context.Context, userID string) ([]*APIKey, error)
+	ListAll(ctx context.Context) ([]*APIKey, error)
 	Delete(ctx context.Context, keyID, userID string) error
+	AdminDelete(ctx context.Context, keyID string) error
 	UpdateLastUsed(ctx context.Context, keyID string) error
 }
 
 // APIKey represents an API key for use in handler interfaces.
 type APIKey struct {
-	CreatedAt  time.Time
-	ExpiresAt  *time.Time
-	LastUsedAt *time.Time
-	ID         string
-	UserID     string
-	Name       string
-	KeyPrefix  string
+	CreatedAt      time.Time
+	ExpiresAt      *time.Time
+	LastUsedAt     *time.Time
+	ID             string
+	UserID         string
+	Name           string
+	Description    string
+	KeyPrefix      string
+	Scopes         []string
+	AllowedServers []string
+	AllowedTools   []string
+	Namespaces     []string
+	IPWhitelist    []string
+	ReadOnly       bool
 }
 
 // UserRepositoryInterface defines the interface for user repository operations.

@@ -110,10 +110,60 @@ func TestAPIKey_KeyPrefix(t *testing.T) {
 	plainKey, _, err := GenerateAPIKey()
 	require.NoError(t, err)
 
-	// Key prefix should be first 14 chars: "mcpgw_" + 8 hex chars
-	prefix := plainKey[:14]
+	// Verify key format
+	assert.True(t, strings.HasPrefix(plainKey, "mcpgw_"))
+	assert.Len(t, plainKey, 70) // mcpgw_ (6) + 64 hex chars
+}
+
+func TestGenerateKeyPrefix(t *testing.T) {
+	tests := []struct {
+		name     string
+		plainKey string
+		expected string
+	}{
+		{
+			name:     "standard key",
+			plainKey: "mcpgw_9e8fd2a0abcdef1234567890abcdef1234567890abcdef1234567890ab1234",
+			expected: "mcpgw_9e8f****1234",
+		},
+		{
+			name:     "short key (less than 16 chars)",
+			plainKey: "mcpgw_short",
+			expected: "mcpgw_short",
+		},
+		{
+			name:     "exactly 16 chars",
+			plainKey: "mcpgw_1234567890",
+			expected: "mcpgw_1234****7890",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := generateKeyPrefix(tt.plainKey)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestGenerateKeyPrefix_Integration(t *testing.T) {
+	// Generate a real key and verify the prefix format
+	plainKey, _, err := GenerateAPIKey()
+	require.NoError(t, err)
+
+	prefix := generateKeyPrefix(plainKey)
+
+	// Should start with mcpgw_ + first 4 hex chars
 	assert.True(t, strings.HasPrefix(prefix, "mcpgw_"))
-	assert.Len(t, prefix, 14)
+
+	// Should contain **** in the middle
+	assert.Contains(t, prefix, "****")
+
+	// Should end with last 4 chars of the original key
+	assert.True(t, strings.HasSuffix(prefix, plainKey[len(plainKey)-4:]))
+
+	// Total length: mcpgw_ (6) + 4 hex (4) + **** (4) + 4 hex (4) = 18
+	assert.Len(t, prefix, 18)
 }
 
 func TestAPIKeyStruct(t *testing.T) {
