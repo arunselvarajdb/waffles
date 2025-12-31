@@ -51,7 +51,9 @@ type APIKeyRepositoryInterface interface {
 	GetByID(ctx context.Context, keyID string) (*APIKey, error)
 	GetByHash(ctx context.Context, keyHash string) (*APIKey, error)
 	ListByUser(ctx context.Context, userID string) ([]*APIKey, error)
+	ListAll(ctx context.Context) ([]*APIKey, error)
 	Delete(ctx context.Context, keyID, userID string) error
+	AdminDelete(ctx context.Context, keyID string) error
 	UpdateLastUsed(ctx context.Context, keyID string) error
 }
 

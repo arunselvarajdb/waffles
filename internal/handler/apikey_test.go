@@ -109,6 +109,22 @@ func (m *mockAPIKeyRepo) UpdateLastUsed(ctx context.Context, keyID string) error
 	return nil
 }
 
+func (m *mockAPIKeyRepo) ListAll(ctx context.Context) ([]*APIKey, error) {
+	var result []*APIKey
+	for _, key := range m.keys {
+		result = append(result, key)
+	}
+	return result, nil
+}
+
+func (m *mockAPIKeyRepo) AdminDelete(ctx context.Context, keyID string) error {
+	if _, ok := m.keys[keyID]; !ok {
+		return domain.ErrAPIKeyNotFound
+	}
+	delete(m.keys, keyID)
+	return nil
+}
+
 // ======================== Tests ========================
 
 func TestNewAPIKeyHandler(t *testing.T) {
@@ -526,5 +542,96 @@ func TestAPIKeyTypes(t *testing.T) {
 		require.NoError(t, err)
 		assert.Contains(t, string(data), "key-123")
 		assert.Contains(t, string(data), "mcpgw_abc")
+	})
+}
+
+func TestAPIKeyHandler_ListAllAPIKeys(t *testing.T) {
+	log := logger.NewNopLogger()
+
+	t.Run("success - empty list", func(t *testing.T) {
+		mockRepo := newMockAPIKeyRepo()
+		handler := NewAPIKeyHandlerWithInterface(mockRepo, log)
+
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest("GET", "/api/v1/admin/api-keys", nil)
+
+		handler.ListAllAPIKeys(c)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err)
+		assert.Equal(t, float64(0), response["total"])
+	})
+
+	t.Run("success - with keys from multiple users", func(t *testing.T) {
+		mockRepo := newMockAPIKeyRepo()
+		mockRepo.keys["key-1"] = &APIKey{ID: "key-1", UserID: "user-1", Name: "Key 1", KeyPrefix: "mcpgw_abc...1234"}
+		mockRepo.keys["key-2"] = &APIKey{ID: "key-2", UserID: "user-2", Name: "Key 2", KeyPrefix: "mcpgw_xyz...5678"}
+		handler := NewAPIKeyHandlerWithInterface(mockRepo, log)
+
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest("GET", "/api/v1/admin/api-keys", nil)
+
+		handler.ListAllAPIKeys(c)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err)
+		assert.Equal(t, float64(2), response["total"])
+	})
+}
+
+func TestAPIKeyHandler_AdminDeleteAPIKey(t *testing.T) {
+	log := logger.NewNopLogger()
+
+	t.Run("empty ID", func(t *testing.T) {
+		mockRepo := newMockAPIKeyRepo()
+		handler := NewAPIKeyHandlerWithInterface(mockRepo, log)
+
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest("DELETE", "/api/v1/admin/api-keys/", nil)
+		c.Params = gin.Params{{Key: "id", Value: ""}}
+
+		handler.AdminDeleteAPIKey(c)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+	})
+
+	t.Run("not found", func(t *testing.T) {
+		mockRepo := newMockAPIKeyRepo()
+		handler := NewAPIKeyHandlerWithInterface(mockRepo, log)
+
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest("DELETE", "/api/v1/admin/api-keys/nonexistent", nil)
+		c.Params = gin.Params{{Key: "id", Value: "nonexistent"}}
+
+		handler.AdminDeleteAPIKey(c)
+
+		assert.Equal(t, http.StatusNotFound, w.Code)
+	})
+
+	t.Run("success", func(t *testing.T) {
+		mockRepo := newMockAPIKeyRepo()
+		mockRepo.keys["key-123"] = &APIKey{ID: "key-123", UserID: "user-456", Name: "Other User Key"}
+		handler := NewAPIKeyHandlerWithInterface(mockRepo, log)
+
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest("DELETE", "/api/v1/admin/api-keys/key-123", nil)
+		c.Params = gin.Params{{Key: "id", Value: "key-123"}}
+
+		handler.AdminDeleteAPIKey(c)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err)
+		assert.Equal(t, "API key deleted successfully", response["message"])
 	})
 }

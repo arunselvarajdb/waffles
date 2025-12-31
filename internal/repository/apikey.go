@@ -90,6 +90,18 @@ type CreateAPIKeyInput struct {
 	ReadOnly       bool
 }
 
+// generateKeyPrefix creates an obfuscated key prefix for display
+// Format: mcpgw_<first4>****<last4> (e.g., "mcpgw_9e8f****90ef")
+func generateKeyPrefix(plainKey string) string {
+	// Key format is mcpgw_<64 hex chars>
+	// We want to show: mcpgw_<first4>****<last4>
+	if len(plainKey) < 16 {
+		return plainKey
+	}
+	// Get first 10 chars (mcpgw_ + first 4 hex) and last 4 chars
+	return plainKey[:10] + "****" + plainKey[len(plainKey)-4:]
+}
+
 // Create creates a new API key for a user
 // Returns the APIKey record and the plain text key (only returned once!)
 func (r *APIKeyRepository) Create(ctx context.Context, input *CreateAPIKeyInput) (*APIKey, string, error) {
@@ -99,12 +111,15 @@ func (r *APIKeyRepository) Create(ctx context.Context, input *CreateAPIKeyInput)
 		return nil, "", fmt.Errorf("failed to generate API key: %w", err)
 	}
 
+	// Generate obfuscated prefix for display (e.g., "mcpgw_abc12345...6789")
+	keyPrefix := generateKeyPrefix(plainKey)
+
 	query := `
 		INSERT INTO api_keys (
-			user_id, name, description, key_hash, expires_at,
+			user_id, name, description, key_hash, key_prefix, expires_at,
 			scopes, allowed_servers, allowed_tools, namespaces, ip_whitelist, read_only
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 		RETURNING id, created_at
 	`
 
@@ -135,7 +150,7 @@ func (r *APIKeyRepository) Create(ctx context.Context, input *CreateAPIKeyInput)
 		Name:           input.Name,
 		Description:    input.Description,
 		KeyHash:        keyHash,
-		KeyPrefix:      plainKey[:14], // "mcpgw_" + first 8 hex chars
+		KeyPrefix:      keyPrefix,
 		ExpiresAt:      input.ExpiresAt,
 		Scopes:         scopes,
 		AllowedServers: allowedServers,
@@ -146,7 +161,7 @@ func (r *APIKeyRepository) Create(ctx context.Context, input *CreateAPIKeyInput)
 	}
 
 	err = r.pool.QueryRow(ctx, query,
-		input.UserID, input.Name, input.Description, keyHash, input.ExpiresAt,
+		input.UserID, input.Name, input.Description, keyHash, keyPrefix, input.ExpiresAt,
 		scopes, allowedServers, allowedTools, namespaces, ipWhitelist, input.ReadOnly,
 	).Scan(
 		&apiKey.ID,
@@ -170,7 +185,8 @@ func (r *APIKeyRepository) Create(ctx context.Context, input *CreateAPIKeyInput)
 // GetByHash retrieves an API key by its hash
 func (r *APIKeyRepository) GetByHash(ctx context.Context, keyHash string) (*APIKey, error) {
 	query := `
-		SELECT id, user_id, name, COALESCE(description, ''), key_hash, expires_at, last_used_at, created_at,
+		SELECT id, user_id, name, COALESCE(description, ''), key_hash, COALESCE(key_prefix, 'mcpgw_****'),
+			expires_at, last_used_at, created_at,
 			COALESCE(scopes, '{}'), COALESCE(allowed_servers, '{}'), COALESCE(allowed_tools, '{}'),
 			COALESCE(namespaces, '{}'), COALESCE(ip_whitelist, '{}'), COALESCE(read_only, false)
 		FROM api_keys
@@ -184,6 +200,7 @@ func (r *APIKeyRepository) GetByHash(ctx context.Context, keyHash string) (*APIK
 		&apiKey.Name,
 		&apiKey.Description,
 		&apiKey.KeyHash,
+		&apiKey.KeyPrefix,
 		&apiKey.ExpiresAt,
 		&apiKey.LastUsedAt,
 		&apiKey.CreatedAt,
@@ -214,7 +231,8 @@ func (r *APIKeyRepository) GetByHash(ctx context.Context, keyHash string) (*APIK
 // ListByUser retrieves all API keys for a user
 func (r *APIKeyRepository) ListByUser(ctx context.Context, userID string) ([]*APIKey, error) {
 	query := `
-		SELECT id, user_id, name, COALESCE(description, ''), key_hash, expires_at, last_used_at, created_at,
+		SELECT id, user_id, name, COALESCE(description, ''), key_hash, COALESCE(key_prefix, 'mcpgw_****'),
+			expires_at, last_used_at, created_at,
 			COALESCE(scopes, '{}'), COALESCE(allowed_servers, '{}'), COALESCE(allowed_tools, '{}'),
 			COALESCE(namespaces, '{}'), COALESCE(ip_whitelist, '{}'), COALESCE(read_only, false)
 		FROM api_keys
@@ -238,6 +256,7 @@ func (r *APIKeyRepository) ListByUser(ctx context.Context, userID string) ([]*AP
 			&key.Name,
 			&key.Description,
 			&key.KeyHash,
+			&key.KeyPrefix,
 			&key.ExpiresAt,
 			&key.LastUsedAt,
 			&key.CreatedAt,
@@ -252,8 +271,6 @@ func (r *APIKeyRepository) ListByUser(ctx context.Context, userID string) ([]*AP
 			r.logger.Error().Err(err).Msg("Failed to scan API key row")
 			continue
 		}
-		// Generate prefix from hash (for display, we store only hash)
-		key.KeyPrefix = "mcpgw_****"
 		keys = append(keys, &key)
 	}
 
@@ -264,6 +281,87 @@ func (r *APIKeyRepository) ListByUser(ctx context.Context, userID string) ([]*AP
 
 	r.logger.Debug().Str("user_id", userID).Int("count", len(keys)).Msg("API keys listed")
 	return keys, nil
+}
+
+// ListAll retrieves all API keys (for admin use)
+func (r *APIKeyRepository) ListAll(ctx context.Context) ([]*APIKey, error) {
+	query := `
+		SELECT ak.id, ak.user_id, ak.name, COALESCE(ak.description, ''), ak.key_hash, COALESCE(ak.key_prefix, 'mcpgw_****'),
+			ak.expires_at, ak.last_used_at, ak.created_at,
+			COALESCE(ak.scopes, '{}'), COALESCE(ak.allowed_servers, '{}'), COALESCE(ak.allowed_tools, '{}'),
+			COALESCE(ak.namespaces, '{}'), COALESCE(ak.ip_whitelist, '{}'), COALESCE(ak.read_only, false),
+			COALESCE(u.email, '') as user_email
+		FROM api_keys ak
+		LEFT JOIN users u ON ak.user_id = u.id::text
+		ORDER BY ak.created_at DESC
+	`
+
+	rows, err := r.pool.Query(ctx, query)
+	if err != nil {
+		r.logger.Error().Err(err).Msg("Failed to list all API keys")
+		return nil, fmt.Errorf("failed to list all API keys: %w", err)
+	}
+	defer rows.Close()
+
+	var keys []*APIKey
+	for rows.Next() {
+		var key APIKey
+		var userEmail string
+		err := rows.Scan(
+			&key.ID,
+			&key.UserID,
+			&key.Name,
+			&key.Description,
+			&key.KeyHash,
+			&key.KeyPrefix,
+			&key.ExpiresAt,
+			&key.LastUsedAt,
+			&key.CreatedAt,
+			&key.Scopes,
+			&key.AllowedServers,
+			&key.AllowedTools,
+			&key.Namespaces,
+			&key.IPWhitelist,
+			&key.ReadOnly,
+			&userEmail,
+		)
+		if err != nil {
+			r.logger.Error().Err(err).Msg("Failed to scan API key row")
+			continue
+		}
+		// Store user email in description field temporarily for admin display
+		// This is a workaround since we don't have a separate field
+		if key.Description == "" && userEmail != "" {
+			key.Description = userEmail
+		}
+		keys = append(keys, &key)
+	}
+
+	if err = rows.Err(); err != nil {
+		r.logger.Error().Err(err).Msg("Error iterating API key rows")
+		return nil, fmt.Errorf("error iterating API keys: %w", err)
+	}
+
+	r.logger.Debug().Int("count", len(keys)).Msg("All API keys listed")
+	return keys, nil
+}
+
+// AdminDelete deletes any API key by ID (admin only, no ownership check)
+func (r *APIKeyRepository) AdminDelete(ctx context.Context, keyID string) error {
+	query := `DELETE FROM api_keys WHERE id = $1`
+
+	result, err := r.pool.Exec(ctx, query, keyID)
+	if err != nil {
+		r.logger.Error().Err(err).Str("key_id", keyID).Msg("Failed to delete API key (admin)")
+		return fmt.Errorf("failed to delete API key: %w", err)
+	}
+
+	if result.RowsAffected() == 0 {
+		return domain.ErrAPIKeyNotFound
+	}
+
+	r.logger.Info().Str("key_id", keyID).Msg("API key deleted by admin")
+	return nil
 }
 
 // UpdateLastUsed updates the last_used_at timestamp for an API key
@@ -304,7 +402,8 @@ func (r *APIKeyRepository) Delete(ctx context.Context, keyID, userID string) err
 // GetByID retrieves an API key by ID
 func (r *APIKeyRepository) GetByID(ctx context.Context, keyID string) (*APIKey, error) {
 	query := `
-		SELECT id, user_id, name, COALESCE(description, ''), key_hash, expires_at, last_used_at, created_at,
+		SELECT id, user_id, name, COALESCE(description, ''), key_hash, COALESCE(key_prefix, 'mcpgw_****'),
+			expires_at, last_used_at, created_at,
 			COALESCE(scopes, '{}'), COALESCE(allowed_servers, '{}'), COALESCE(allowed_tools, '{}'),
 			COALESCE(namespaces, '{}'), COALESCE(ip_whitelist, '{}'), COALESCE(read_only, false)
 		FROM api_keys
@@ -318,6 +417,7 @@ func (r *APIKeyRepository) GetByID(ctx context.Context, keyID string) (*APIKey, 
 		&apiKey.Name,
 		&apiKey.Description,
 		&apiKey.KeyHash,
+		&apiKey.KeyPrefix,
 		&apiKey.ExpiresAt,
 		&apiKey.LastUsedAt,
 		&apiKey.CreatedAt,
@@ -337,7 +437,6 @@ func (r *APIKeyRepository) GetByID(ctx context.Context, keyID string) (*APIKey, 
 		return nil, fmt.Errorf("failed to get API key: %w", err)
 	}
 
-	apiKey.KeyPrefix = "mcpgw_****"
 	return &apiKey, nil
 }
 

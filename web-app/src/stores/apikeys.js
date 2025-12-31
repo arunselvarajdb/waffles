@@ -72,12 +72,20 @@ export const useApiKeysStore = defineStore('apikeys', {
           key: response.key // Plain-text key
         }
         // Add to list (without the plain-text key for security)
+        // Include all permission fields from the create request
         this.apiKeys.unshift({
           id: response.id,
           name: response.name,
           key_prefix: response.key?.substring(0, 14) || 'mcpgw_****',
           expires_at: response.expires_at,
-          created_at: response.created_at
+          created_at: response.created_at,
+          // Include permission fields from the create request
+          scopes: keyData.scopes || [],
+          allowed_servers: keyData.allowed_servers || [],
+          allowed_tools: keyData.allowed_tools || [],
+          namespaces: keyData.namespaces || [],
+          ip_whitelist: keyData.ip_whitelist || [],
+          read_only: keyData.read_only || false
         })
         return response
       } catch (error) {

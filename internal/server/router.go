@@ -315,6 +315,13 @@ func (s *Server) SetupRoutes() {
 
 				// Permissions (read-only)
 				adminGroup.GET("/permissions", scopeMiddleware.RequireScope("roles:read"), rolesHandler.ListPermissions)
+
+				// API Key management (admin can view/delete all keys)
+				apiKeysAdmin := adminGroup.Group("/api-keys")
+				{
+					apiKeysAdmin.GET("", scopeMiddleware.RequireScope("users:read"), apiKeyHandler.ListAllAPIKeys)
+					apiKeysAdmin.DELETE("/:id", scopeMiddleware.RequireScope("users:write"), apiKeyHandler.AdminDeleteAPIKey)
+				}
 			}
 		}
 	}

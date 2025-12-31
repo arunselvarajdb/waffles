@@ -128,6 +128,22 @@ func (a *apiKeyRepoAdapter) UpdateLastUsed(ctx context.Context, keyID string) er
 	return a.repo.UpdateLastUsed(ctx, keyID)
 }
 
+func (a *apiKeyRepoAdapter) ListAll(ctx context.Context) ([]*APIKey, error) {
+	keys, err := a.repo.ListAll(ctx)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]*APIKey, len(keys))
+	for i, key := range keys {
+		result[i] = mapRepoKeyToAPIKey(key)
+	}
+	return result, nil
+}
+
+func (a *apiKeyRepoAdapter) AdminDelete(ctx context.Context, keyID string) error {
+	return a.repo.AdminDelete(ctx, keyID)
+}
+
 // CreateAPIKeyRequest represents the create API key request body
 type CreateAPIKeyRequest struct {
 	Name           string   `json:"name" binding:"required,min=1,max=255"`
@@ -154,12 +170,18 @@ type CreateAPIKeyResponse struct {
 
 // APIKeyInfo represents API key information (without the actual key)
 type APIKeyInfo struct {
-	ID         string     `json:"id"`
-	Name       string     `json:"name"`
-	KeyPrefix  string     `json:"key_prefix"` // First chars for identification
-	ExpiresAt  *time.Time `json:"expires_at,omitempty"`
-	LastUsedAt *time.Time `json:"last_used_at,omitempty"`
-	CreatedAt  time.Time  `json:"created_at"`
+	ID             string     `json:"id"`
+	Name           string     `json:"name"`
+	KeyPrefix      string     `json:"key_prefix"` // First chars for identification
+	ExpiresAt      *time.Time `json:"expires_at,omitempty"`
+	LastUsedAt     *time.Time `json:"last_used_at,omitempty"`
+	CreatedAt      time.Time  `json:"created_at"`
+	Scopes         []string   `json:"scopes,omitempty"`
+	AllowedServers []string   `json:"allowed_servers,omitempty"`
+	AllowedTools   []string   `json:"allowed_tools,omitempty"`
+	Namespaces     []string   `json:"namespaces,omitempty"`
+	IPWhitelist    []string   `json:"ip_whitelist,omitempty"`
+	ReadOnly       bool       `json:"read_only,omitempty"`
 }
 
 // CreateAPIKey handles POST /api/v1/api-keys
@@ -266,12 +288,18 @@ func (h *APIKeyHandler) ListAPIKeys(c *gin.Context) {
 	result := make([]APIKeyInfo, 0, len(keys))
 	for _, key := range keys {
 		result = append(result, APIKeyInfo{
-			ID:         key.ID,
-			Name:       key.Name,
-			KeyPrefix:  key.KeyPrefix,
-			ExpiresAt:  key.ExpiresAt,
-			LastUsedAt: key.LastUsedAt,
-			CreatedAt:  key.CreatedAt,
+			ID:             key.ID,
+			Name:           key.Name,
+			KeyPrefix:      key.KeyPrefix,
+			ExpiresAt:      key.ExpiresAt,
+			LastUsedAt:     key.LastUsedAt,
+			CreatedAt:      key.CreatedAt,
+			Scopes:         key.Scopes,
+			AllowedServers: key.AllowedServers,
+			AllowedTools:   key.AllowedTools,
+			Namespaces:     key.Namespaces,
+			IPWhitelist:    key.IPWhitelist,
+			ReadOnly:       key.ReadOnly,
 		})
 	}
 
@@ -375,11 +403,97 @@ func (h *APIKeyHandler) GetAPIKey(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, APIKeyInfo{
-		ID:         key.ID,
-		Name:       key.Name,
-		KeyPrefix:  key.KeyPrefix,
-		ExpiresAt:  key.ExpiresAt,
-		LastUsedAt: key.LastUsedAt,
-		CreatedAt:  key.CreatedAt,
+		ID:             key.ID,
+		Name:           key.Name,
+		KeyPrefix:      key.KeyPrefix,
+		ExpiresAt:      key.ExpiresAt,
+		LastUsedAt:     key.LastUsedAt,
+		CreatedAt:      key.CreatedAt,
+		Scopes:         key.Scopes,
+		AllowedServers: key.AllowedServers,
+		AllowedTools:   key.AllowedTools,
+		Namespaces:     key.Namespaces,
+		IPWhitelist:    key.IPWhitelist,
+		ReadOnly:       key.ReadOnly,
+	})
+}
+
+// AdminAPIKeyInfo represents API key information for admin view (includes user info)
+type AdminAPIKeyInfo struct {
+	ID         string     `json:"id"`
+	UserID     string     `json:"user_id"`
+	Name       string     `json:"name"`
+	KeyPrefix  string     `json:"key_prefix"`
+	ExpiresAt  *time.Time `json:"expires_at,omitempty"`
+	LastUsedAt *time.Time `json:"last_used_at,omitempty"`
+	CreatedAt  time.Time  `json:"created_at"`
+}
+
+// ListAllAPIKeys handles GET /api/v1/admin/api-keys (admin only)
+func (h *APIKeyHandler) ListAllAPIKeys(c *gin.Context) {
+	keys, err := h.apiKeyRepo.ListAll(c.Request.Context())
+	if err != nil {
+		h.logger.Error().Err(err).Msg("Failed to list all API keys")
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "internal_error",
+			"message": "Failed to list API keys",
+		})
+		return
+	}
+
+	// Convert to response format with user info
+	result := make([]AdminAPIKeyInfo, 0, len(keys))
+	for _, key := range keys {
+		result = append(result, AdminAPIKeyInfo{
+			ID:         key.ID,
+			UserID:     key.UserID,
+			Name:       key.Name,
+			KeyPrefix:  key.KeyPrefix,
+			ExpiresAt:  key.ExpiresAt,
+			LastUsedAt: key.LastUsedAt,
+			CreatedAt:  key.CreatedAt,
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"api_keys": result,
+		"total":    len(result),
+	})
+}
+
+// AdminDeleteAPIKey handles DELETE /api/v1/admin/api-keys/:id (admin only)
+func (h *APIKeyHandler) AdminDeleteAPIKey(c *gin.Context) {
+	keyID := c.Param("id")
+	if keyID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "validation_error",
+			"message": "API key ID is required",
+		})
+		return
+	}
+
+	err := h.apiKeyRepo.AdminDelete(c.Request.Context(), keyID)
+	if err != nil {
+		if errors.Is(err, domain.ErrAPIKeyNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{
+				"error":   "not_found",
+				"message": "API key not found",
+			})
+			return
+		}
+		h.logger.Error().Err(err).Str("key_id", keyID).Msg("Failed to delete API key (admin)")
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "internal_error",
+			"message": "Failed to delete API key",
+		})
+		return
+	}
+
+	h.logger.Info().
+		Str("key_id", keyID).
+		Msg("API key deleted by admin")
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "API key deleted successfully",
 	})
 }

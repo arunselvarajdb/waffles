@@ -8,7 +8,8 @@ export const useAuthStore = defineStore('auth', {
     isAuthenticated: false,
     loading: false,
     error: null,
-    authEnabled: null // null = unknown, true = enabled, false = disabled
+    authEnabled: null, // null = unknown, true = enabled, false = disabled
+    authProvider: null // 'local', 'oauth', 'ldap', or null if unknown
   }),
 
   getters: {
@@ -21,6 +22,10 @@ export const useAuthStore = defineStore('auth', {
       if (state.roles.includes('operator')) return 'operator'
       if (state.roles.includes('viewer')) return 'viewer'
       return 'user'
+    },
+    // Check if password change is allowed (only for local or LDAP auth)
+    canChangePassword: (state) => {
+      return state.authProvider === 'local' || state.authProvider === 'ldap'
     }
   },
 
@@ -89,6 +94,7 @@ export const useAuthStore = defineStore('auth', {
       try {
         const status = await api.get('/status')
         this.authEnabled = status.auth?.enabled ?? true
+        this.authProvider = status.auth?.provider ?? null
 
         // If auth is disabled, auto-login as admin for development
         if (this.authEnabled === false && !this.isAuthenticated) {
@@ -153,6 +159,6 @@ export const useAuthStore = defineStore('auth', {
   // Persist auth state in sessionStorage
   persist: {
     storage: sessionStorage,
-    paths: ['user', 'roles', 'isAuthenticated', 'authEnabled']
+    paths: ['user', 'roles', 'isAuthenticated', 'authEnabled', 'authProvider']
   }
 })
