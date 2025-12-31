@@ -153,6 +153,48 @@ func TestValidateServerURL(t *testing.T) {
 			expectError: true,
 			errorReason: "documentation IP range not allowed",
 		},
+
+		// IPv4-mapped IPv6 addresses (bypass attempts)
+		{
+			name:        "IPv4-mapped IPv6 loopback",
+			url:         "http://[::ffff:127.0.0.1]:8080",
+			expectError: true,
+			errorReason: "loopback address not allowed",
+		},
+		{
+			name:        "IPv4-mapped IPv6 private",
+			url:         "http://[::ffff:10.0.0.1]:8080",
+			expectError: true,
+			errorReason: "private IP address not allowed",
+		},
+		{
+			name:        "IPv4-mapped IPv6 metadata",
+			url:         "http://[::ffff:169.254.169.254]:8080",
+			expectError: true,
+			errorReason: "cloud metadata service IP not allowed",
+		},
+
+		// Credentials in URL (should be rejected)
+		{
+			name:        "URL with credentials",
+			url:         "http://user:pass@example.com/api",
+			expectError: true,
+			errorReason: "credentials in URL not allowed",
+		},
+
+		// Control characters (CRLF injection)
+		{
+			name:        "URL with newline",
+			url:         "http://example.com/path\r\nHost: evil.com",
+			expectError: true,
+			errorReason: "URL contains control characters",
+		},
+		{
+			name:        "URL with tab",
+			url:         "http://example.com/path\tevil",
+			expectError: true,
+			errorReason: "URL contains control characters",
+		},
 	}
 
 	for _, tt := range tests {

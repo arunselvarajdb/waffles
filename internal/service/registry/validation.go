@@ -27,6 +27,11 @@ func ValidateServerURL(serverURL string) error {
 		return &SSRFError{URL: serverURL, Reason: "empty URL"}
 	}
 
+	// Check for control characters (CRLF injection prevention)
+	if strings.ContainsAny(serverURL, "\r\n\t") {
+		return &SSRFError{URL: serverURL, Reason: "URL contains control characters"}
+	}
+
 	parsedURL, err := url.Parse(serverURL)
 	if err != nil {
 		return &SSRFError{URL: serverURL, Reason: "invalid URL format", Details: err.Error()}
@@ -38,6 +43,14 @@ func ValidateServerURL(serverURL string) error {
 			URL:     serverURL,
 			Reason:  "invalid scheme",
 			Details: fmt.Sprintf("only http and https are allowed, got: %s", parsedURL.Scheme),
+		}
+	}
+
+	// Reject URLs with credentials (user:password@host)
+	if parsedURL.User != nil {
+		return &SSRFError{
+			URL:    serverURL,
+			Reason: "credentials in URL not allowed",
 		}
 	}
 

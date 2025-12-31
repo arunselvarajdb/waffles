@@ -144,6 +144,26 @@ func (h *RegistryHandler) CreateServer(c *gin.Context) {
 		return
 	}
 
+	// SSRF protection: validate server URL before creating
+	if err := registry.ValidateServerURL(req.URL); err != nil {
+		h.logger.Warn().Err(err).Str("url", req.URL).Msg("SSRF validation failed for server URL")
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	// SSRF protection: validate health check URL if provided
+	if req.HealthCheckURL != "" {
+		if err := registry.ValidateServerURL(req.HealthCheckURL); err != nil {
+			h.logger.Warn().Err(err).Str("url", req.HealthCheckURL).Msg("SSRF validation failed for health check URL")
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": err.Error(),
+			})
+			return
+		}
+	}
+
 	// Create server
 	server, err := h.service.CreateServer(c.Request.Context(), &req)
 	if err != nil {
@@ -221,6 +241,28 @@ func (h *RegistryHandler) UpdateServer(c *gin.Context) {
 			"error": "Invalid request body",
 		})
 		return
+	}
+
+	// SSRF protection: validate server URL if being updated
+	if req.URL != nil && *req.URL != "" {
+		if err := registry.ValidateServerURL(*req.URL); err != nil {
+			h.logger.Warn().Err(err).Str("url", *req.URL).Msg("SSRF validation failed for server URL")
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": err.Error(),
+			})
+			return
+		}
+	}
+
+	// SSRF protection: validate health check URL if being updated
+	if req.HealthCheckURL != nil && *req.HealthCheckURL != "" {
+		if err := registry.ValidateServerURL(*req.HealthCheckURL); err != nil {
+			h.logger.Warn().Err(err).Str("url", *req.HealthCheckURL).Msg("SSRF validation failed for health check URL")
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": err.Error(),
+			})
+			return
+		}
 	}
 
 	server, err := h.service.UpdateServer(c.Request.Context(), id, &req)
