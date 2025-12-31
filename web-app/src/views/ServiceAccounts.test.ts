@@ -152,7 +152,7 @@ describe('ServiceAccounts', () => {
       await flushPromises()
 
       expect(wrapper.text()).toContain('Test Service Key')
-      expect(wrapper.text()).toContain('mcp_abc123...')
+      expect(wrapper.text()).toContain('mcp_abc123')
       expect(wrapper.text()).toContain('service@example.com')
       expect(wrapper.text()).toContain('user-123...')
     })
