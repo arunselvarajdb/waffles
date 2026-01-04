@@ -134,6 +134,19 @@
           hint="Comma-separated list of tags"
         />
 
+        <!-- Error Message -->
+        <div v-if="errorMessage" class="rounded-lg bg-red-50 border border-red-200 p-3">
+          <div class="flex items-start gap-2">
+            <svg class="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <div class="flex-1">
+              <p class="text-sm font-medium text-red-800">Failed to add server</p>
+              <p class="text-sm text-red-700 mt-1">{{ errorMessage }}</p>
+            </div>
+          </div>
+        </div>
+
         <!-- Tool Selection (shown after successful connection test) -->
         <div v-if="discoveredTools.length > 0" class="pt-4 border-t border-gray-200">
           <div class="flex items-center justify-between mb-3">
@@ -224,6 +237,7 @@ const testingConnection = ref(false)
 const connectionTestResult = ref(null)
 const discoveredTools = ref([])
 const selectedTools = ref([])
+const errorMessage = ref('')
 
 const formData = ref({
   name: '',
@@ -291,6 +305,7 @@ const resetForm = () => {
   connectionTestResult.value = null
   discoveredTools.value = []
   selectedTools.value = []
+  errorMessage.value = ''
 }
 
 const testConnection = async () => {
@@ -344,6 +359,7 @@ const handleSubmit = async () => {
   if (loading.value) return
 
   loading.value = true
+  errorMessage.value = ''
 
   const payload = {
     ...formData.value,
@@ -355,6 +371,7 @@ const handleSubmit = async () => {
     await serversStore.createServer(payload)
   } catch (error) {
     console.error('Failed to create server:', error)
+    errorMessage.value = error.response?.data?.error || error.message || 'An unexpected error occurred'
     loading.value = false
     return
   }
