@@ -32,17 +32,11 @@
                   v-model="connectionConfig.transport"
                   class="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:border-blue-500 focus:ring-blue-500"
                 >
-                  <option value="streamable_http">Streamable HTTP (MCP 2025)</option>
+                  <option value="streamable_http">Streamable HTTP</option>
                   <option value="sse">SSE (Server-Sent Events)</option>
                   <option value="http">HTTP (Legacy)</option>
                 </select>
               </div>
-
-              <BaseInput
-                v-model="connectionConfig.protocol_version"
-                label="Protocol Version"
-                placeholder="2025-11-25"
-              />
 
               <BaseButton
                 variant="primary"
@@ -320,8 +314,7 @@ const router = useRouter()
 // Connection state
 const connectionConfig = ref({
   url: '',
-  transport: 'streamable_http',
-  protocol_version: '2025-11-25'
+  transport: 'streamable_http'
 })
 const connecting = ref(false)
 const connectionStatus = ref(null)
@@ -359,7 +352,6 @@ const connect = async () => {
     const result = await api.post('/servers/test-connection', {
       url: connectionConfig.value.url,
       transport: connectionConfig.value.transport,
-      protocol_version: connectionConfig.value.protocol_version || '2025-11-25',
       timeout: 30
     })
     connectionStatus.value = result

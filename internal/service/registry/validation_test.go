@@ -153,6 +153,48 @@ func TestValidateServerURL(t *testing.T) {
 			expectError: true,
 			errorReason: "documentation IP range not allowed",
 		},
+
+		// IPv4-mapped IPv6 addresses (bypass attempts)
+		{
+			name:        "IPv4-mapped IPv6 loopback",
+			url:         "http://[::ffff:127.0.0.1]:8080",
+			expectError: true,
+			errorReason: "loopback address not allowed",
+		},
+		{
+			name:        "IPv4-mapped IPv6 private",
+			url:         "http://[::ffff:10.0.0.1]:8080",
+			expectError: true,
+			errorReason: "private IP address not allowed",
+		},
+		{
+			name:        "IPv4-mapped IPv6 metadata",
+			url:         "http://[::ffff:169.254.169.254]:8080",
+			expectError: true,
+			errorReason: "cloud metadata service IP not allowed",
+		},
+
+		// Credentials in URL (should be rejected)
+		{
+			name:        "URL with credentials",
+			url:         "http://user:pass@example.com/api",
+			expectError: true,
+			errorReason: "credentials in URL not allowed",
+		},
+
+		// Control characters (CRLF injection)
+		{
+			name:        "URL with newline",
+			url:         "http://example.com/path\r\nHost: evil.com",
+			expectError: true,
+			errorReason: "URL contains control characters",
+		},
+		{
+			name:        "URL with tab",
+			url:         "http://example.com/path\tevil",
+			expectError: true,
+			errorReason: "URL contains control characters",
+		},
 	}
 
 	for _, tt := range tests {
@@ -347,6 +389,184 @@ func TestIsDocumentationIP(t *testing.T) {
 			ip := net.ParseIP(tt.ip)
 			require.NotNil(t, ip)
 			assert.Equal(t, tt.expected, isDocumentationIP(ip))
+		})
+	}
+}
+
+func TestValidateServerURLWithConfig(t *testing.T) {
+	tests := []struct {
+		name        string
+		url         string
+		config      SSRFConfig
+		expectError bool
+		errorReason string
+	}{
+		// SSRF disabled - allow everything
+		{
+			name:        "SSRF disabled allows localhost",
+			url:         "http://localhost:8080",
+			config:      SSRFConfig{Enabled: false},
+			expectError: false,
+		},
+		{
+			name:        "SSRF disabled allows private IPs",
+			url:         "http://10.0.0.1:8080",
+			config:      SSRFConfig{Enabled: false},
+			expectError: false,
+		},
+
+		// Allowed hosts
+		{
+			name: "allowed host bypasses checks",
+			url:  "http://host.docker.internal:8080",
+			config: SSRFConfig{
+				Enabled:      true,
+				AllowedHosts: []string{"host.docker.internal"},
+			},
+			expectError: false,
+		},
+		{
+			name: "allowed host case insensitive",
+			url:  "http://HOST.DOCKER.INTERNAL:8080",
+			config: SSRFConfig{
+				Enabled:      true,
+				AllowedHosts: []string{"host.docker.internal"},
+			},
+			expectError: false,
+		},
+
+		// Allow localhost
+		{
+			name: "localhost allowed by config",
+			url:  "http://localhost:8080",
+			config: SSRFConfig{
+				Enabled:        true,
+				AllowLocalhost: true,
+			},
+			expectError: false,
+		},
+		{
+			name: "loopback allowed when localhost enabled",
+			url:  "http://127.0.0.1:8080",
+			config: SSRFConfig{
+				Enabled:        true,
+				AllowLocalhost: true,
+			},
+			expectError: false,
+		},
+
+		// Allow private networks
+		{
+			name: "private IP allowed by config",
+			url:  "http://192.168.1.1:8080",
+			config: SSRFConfig{
+				Enabled:              true,
+				AllowPrivateNetworks: true,
+			},
+			expectError: false,
+		},
+		{
+			name: "10.x.x.x allowed by config",
+			url:  "http://10.0.0.1:8080",
+			config: SSRFConfig{
+				Enabled:              true,
+				AllowPrivateNetworks: true,
+			},
+			expectError: false,
+		},
+
+		// Allowed CIDRs
+		{
+			name: "IP in allowed CIDR",
+			url:  "http://172.20.0.5:8080",
+			config: SSRFConfig{
+				Enabled:      true,
+				AllowedCIDRs: []string{"172.20.0.0/16"},
+			},
+			expectError: false,
+		},
+		{
+			name: "IP not in allowed CIDR still blocked",
+			url:  "http://172.20.0.5:8080",
+			config: SSRFConfig{
+				Enabled:      true,
+				AllowedCIDRs: []string{"172.21.0.0/16"},
+			},
+			expectError: true,
+			errorReason: "private IP address not allowed",
+		},
+
+		// Cloud metadata still blocked even with private networks allowed
+		{
+			name: "cloud metadata blocked even with private networks",
+			url:  "http://169.254.169.254/latest/meta-data",
+			config: SSRFConfig{
+				Enabled:              true,
+				AllowPrivateNetworks: true,
+			},
+			expectError: true,
+			errorReason: "cloud metadata service IP not allowed",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateServerURLWithConfig(tt.url, tt.config)
+
+			if tt.expectError {
+				require.Error(t, err)
+				var ssrfErr *SSRFError
+				require.ErrorAs(t, err, &ssrfErr)
+				assert.Contains(t, ssrfErr.Reason, tt.errorReason)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestIsAllowedHost(t *testing.T) {
+	tests := []struct {
+		host         string
+		allowedHosts []string
+		expected     bool
+	}{
+		{"host.docker.internal", []string{"host.docker.internal"}, true},
+		{"HOST.DOCKER.INTERNAL", []string{"host.docker.internal"}, true},
+		{"example.com", []string{"host.docker.internal"}, false},
+		{"kubernetes.default.svc", []string{"host.docker.internal", "kubernetes.default.svc"}, true},
+		{"example.com", nil, false},
+		{"example.com", []string{}, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.host, func(t *testing.T) {
+			assert.Equal(t, tt.expected, isAllowedHost(tt.host, tt.allowedHosts))
+		})
+	}
+}
+
+func TestIsInAllowedCIDR(t *testing.T) {
+	tests := []struct {
+		ip           string
+		allowedCIDRs []string
+		expected     bool
+	}{
+		{"172.20.0.5", []string{"172.20.0.0/16"}, true},
+		{"172.21.0.5", []string{"172.20.0.0/16"}, false},
+		{"10.0.0.1", []string{"10.0.0.0/8"}, true},
+		{"192.168.1.1", []string{"10.0.0.0/8", "192.168.0.0/16"}, true},
+		{"8.8.8.8", []string{"10.0.0.0/8"}, false},
+		{"10.0.0.1", nil, false},
+		{"10.0.0.1", []string{}, false},
+		{"10.0.0.1", []string{"invalid-cidr"}, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.ip, func(t *testing.T) {
+			ip := net.ParseIP(tt.ip)
+			require.NotNil(t, ip)
+			assert.Equal(t, tt.expected, isInAllowedCIDR(ip, tt.allowedCIDRs))
 		})
 	}
 }

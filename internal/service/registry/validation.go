@@ -7,6 +7,26 @@ import (
 	"strings"
 )
 
+// SSRFConfig holds SSRF protection settings (mirrors config.SSRFConfig)
+type SSRFConfig struct {
+	Enabled              bool
+	AllowPrivateNetworks bool
+	AllowLocalhost       bool
+	AllowedHosts         []string
+	AllowedCIDRs         []string
+}
+
+// DefaultSSRFConfig returns the default (strict) SSRF configuration
+func DefaultSSRFConfig() SSRFConfig {
+	return SSRFConfig{
+		Enabled:              true,
+		AllowPrivateNetworks: false,
+		AllowLocalhost:       false,
+		AllowedHosts:         nil,
+		AllowedCIDRs:         nil,
+	}
+}
+
 // SSRFError represents an SSRF validation error
 type SSRFError struct {
 	URL     string
@@ -22,9 +42,24 @@ func (e *SSRFError) Error() string {
 }
 
 // ValidateServerURL validates that a server URL is safe and not targeting internal resources
+// Uses default (strict) configuration - blocks all private/internal IPs
 func ValidateServerURL(serverURL string) error {
+	return ValidateServerURLWithConfig(serverURL, DefaultSSRFConfig())
+}
+
+// ValidateServerURLWithConfig validates a server URL with custom SSRF settings
+func ValidateServerURLWithConfig(serverURL string, cfg SSRFConfig) error {
+	// If SSRF protection is disabled, allow everything
+	if !cfg.Enabled {
+		return nil
+	}
 	if serverURL == "" {
 		return &SSRFError{URL: serverURL, Reason: "empty URL"}
+	}
+
+	// Check for control characters (CRLF injection prevention)
+	if strings.ContainsAny(serverURL, "\r\n\t") {
+		return &SSRFError{URL: serverURL, Reason: "URL contains control characters"}
 	}
 
 	parsedURL, err := url.Parse(serverURL)
@@ -41,30 +76,46 @@ func ValidateServerURL(serverURL string) error {
 		}
 	}
 
+	// Reject URLs with credentials (user:password@host)
+	if parsedURL.User != nil {
+		return &SSRFError{
+			URL:    serverURL,
+			Reason: "credentials in URL not allowed",
+		}
+	}
+
 	// Extract host (without port)
 	host := parsedURL.Hostname()
 	if host == "" {
 		return &SSRFError{URL: serverURL, Reason: "missing host"}
 	}
 
+	// Check if host is in the allowed hosts list (bypasses all other checks)
+	if isAllowedHost(host, cfg.AllowedHosts) {
+		return nil
+	}
+
 	// Check for localhost variations
 	if isLocalhost(host) {
-		return &SSRFError{
-			URL:     serverURL,
-			Reason:  "localhost not allowed",
-			Details: "use a proper hostname or IP address",
+		if !cfg.AllowLocalhost {
+			return &SSRFError{
+				URL:     serverURL,
+				Reason:  "localhost not allowed",
+				Details: "use a proper hostname or IP address",
+			}
 		}
+		return nil // Localhost allowed by config
 	}
 
 	// Check if host is an IP address
 	ip := net.ParseIP(host)
 	if ip != nil {
-		if err := validateIP(ip, serverURL); err != nil {
+		if err := validateIPWithConfig(ip, serverURL, cfg); err != nil {
 			return err
 		}
 	} else {
 		// Host is a domain name - resolve and check
-		if err := validateHostname(host, serverURL); err != nil {
+		if err := validateHostnameWithConfig(host, serverURL, cfg); err != nil {
 			return err
 		}
 	}
@@ -98,8 +149,42 @@ func isLocalhost(host string) bool {
 	return false
 }
 
-// validateIP checks if an IP address is in a private/reserved range
+// isAllowedHost checks if the host is in the allowed hosts list
+func isAllowedHost(host string, allowedHosts []string) bool {
+	host = strings.ToLower(host)
+	for _, allowed := range allowedHosts {
+		if strings.ToLower(allowed) == host {
+			return true
+		}
+	}
+	return false
+}
+
+// isInAllowedCIDR checks if an IP is in one of the allowed CIDR ranges
+func isInAllowedCIDR(ip net.IP, allowedCIDRs []string) bool {
+	for _, cidr := range allowedCIDRs {
+		_, network, err := net.ParseCIDR(cidr)
+		if err != nil {
+			continue
+		}
+		if network.Contains(ip) {
+			return true
+		}
+	}
+	return false
+}
+
+// validateIP checks if an IP address is in a private/reserved range (strict mode)
 func validateIP(ip net.IP, serverURL string) error {
+	return validateIPWithConfig(ip, serverURL, DefaultSSRFConfig())
+}
+
+// validateIPWithConfig checks if an IP address is allowed based on config
+func validateIPWithConfig(ip net.IP, serverURL string, cfg SSRFConfig) error {
+	// Check if IP is in allowed CIDR ranges (bypasses other checks)
+	if isInAllowedCIDR(ip, cfg.AllowedCIDRs) {
+		return nil
+	}
 	// Check cloud metadata service IPs FIRST (before link-local check)
 	// AWS/GCP metadata (169.254.169.254) is in the link-local range but needs special handling
 	if isCloudMetadataIP(ip) {
@@ -110,22 +195,28 @@ func validateIP(ip net.IP, serverURL string) error {
 		}
 	}
 
-	// Check loopback
+	// Check loopback (unless localhost is allowed)
 	if ip.IsLoopback() {
-		return &SSRFError{
-			URL:     serverURL,
-			Reason:  "loopback address not allowed",
-			Details: ip.String(),
+		if !cfg.AllowLocalhost {
+			return &SSRFError{
+				URL:     serverURL,
+				Reason:  "loopback address not allowed",
+				Details: ip.String(),
+			}
 		}
+		return nil // Loopback allowed by config
 	}
 
-	// Check private networks
+	// Check private networks (unless private networks are allowed)
 	if ip.IsPrivate() {
-		return &SSRFError{
-			URL:     serverURL,
-			Reason:  "private IP address not allowed",
-			Details: fmt.Sprintf("%s is in a private range (10.x.x.x, 172.16-31.x.x, 192.168.x.x)", ip.String()),
+		if !cfg.AllowPrivateNetworks {
+			return &SSRFError{
+				URL:     serverURL,
+				Reason:  "private IP address not allowed",
+				Details: fmt.Sprintf("%s is in a private range (10.x.x.x, 172.16-31.x.x, 192.168.x.x)", ip.String()),
+			}
 		}
+		return nil // Private networks allowed by config
 	}
 
 	// Check link-local
@@ -167,8 +258,13 @@ func validateIP(ip net.IP, serverURL string) error {
 	return nil
 }
 
-// validateHostname resolves a hostname and validates all resulting IPs
+// validateHostname resolves a hostname and validates all resulting IPs (strict mode)
 func validateHostname(host, serverURL string) error {
+	return validateHostnameWithConfig(host, serverURL, DefaultSSRFConfig())
+}
+
+// validateHostnameWithConfig resolves a hostname and validates IPs based on config
+func validateHostnameWithConfig(host, serverURL string, cfg SSRFConfig) error {
 	// DNS rebinding protection: resolve the hostname
 	ips, err := net.LookupIP(host)
 	if err != nil {
@@ -179,7 +275,7 @@ func validateHostname(host, serverURL string) error {
 
 	// Validate all resolved IPs
 	for _, ip := range ips {
-		if err := validateIP(ip, serverURL); err != nil {
+		if err := validateIPWithConfig(ip, serverURL, cfg); err != nil {
 			return &SSRFError{
 				URL:     serverURL,
 				Reason:  "hostname resolves to blocked IP",

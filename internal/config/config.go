@@ -10,6 +10,7 @@ type Config struct {
 	Database DatabaseConfig `mapstructure:"database"`
 	Redis    RedisConfig    `mapstructure:"redis"`
 	Auth     AuthConfig     `mapstructure:"auth"`
+	Security SecurityConfig `mapstructure:"security"`
 	Secrets  SecretsConfig  `mapstructure:"secrets"`
 	Logging  LoggingConfig  `mapstructure:"logging"`
 	Metrics  MetricsConfig  `mapstructure:"metrics"`
@@ -266,4 +267,32 @@ type LoggingConfig struct {
 type MetricsConfig struct {
 	Enabled        bool `mapstructure:"enabled"`
 	PrometheusPort int  `mapstructure:"prometheus_port"`
+}
+
+// SecurityConfig holds security-related configuration
+type SecurityConfig struct {
+	// SSRF protection settings for server URL validation
+	SSRF SSRFConfig `mapstructure:"ssrf"`
+}
+
+// SSRFConfig holds SSRF protection settings
+type SSRFConfig struct {
+	// Enable SSRF protection (default: true)
+	// When enabled, private IPs, localhost, and cloud metadata IPs are blocked
+	Enabled bool `mapstructure:"enabled"`
+
+	// Allow private network IPs (10.x, 172.16.x, 192.168.x)
+	// Useful for internal/Kubernetes deployments where MCP servers are internal
+	AllowPrivateNetworks bool `mapstructure:"allow_private_networks"`
+
+	// Allow localhost and loopback addresses (127.x.x.x, ::1)
+	// Only enable for local development
+	AllowLocalhost bool `mapstructure:"allow_localhost"`
+
+	// Additional allowed hostnames (e.g., ["host.docker.internal", "kubernetes.default"])
+	// These bypass SSRF checks entirely
+	AllowedHosts []string `mapstructure:"allowed_hosts"`
+
+	// Additional allowed CIDR ranges (e.g., ["172.17.0.0/16"] for Docker networks)
+	AllowedCIDRs []string `mapstructure:"allowed_cidrs"`
 }

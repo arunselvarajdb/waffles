@@ -91,6 +91,16 @@ func (s *Server) SetupRoutes() {
 
 	// Initialize handlers
 	registryHandler := handler.NewRegistryHandler(registryService, accessService, s.logger)
+
+	// Configure SSRF protection from config
+	registryHandler.SetSSRFConfig(registry.SSRFConfig{
+		Enabled:              s.config.Security.SSRF.Enabled,
+		AllowPrivateNetworks: s.config.Security.SSRF.AllowPrivateNetworks,
+		AllowLocalhost:       s.config.Security.SSRF.AllowLocalhost,
+		AllowedHosts:         s.config.Security.SSRF.AllowedHosts,
+		AllowedCIDRs:         s.config.Security.SSRF.AllowedCIDRs,
+	})
+
 	gatewayHandler := handler.NewGatewayHandler(gatewayService, accessService, s.logger)
 	authHandler := handler.NewAuthHandler(userRepo, s.logger)
 	oauthHandler := handler.NewOAuthHandler(oauthService, userRepo, s.logger, frontendURL)

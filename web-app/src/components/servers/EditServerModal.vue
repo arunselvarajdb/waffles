@@ -61,25 +61,17 @@
           </p>
         </div>
 
-        <div class="grid grid-cols-2 gap-4">
-          <BaseInput
-            v-model="formData.protocol_version"
-            label="Protocol Version"
-            placeholder="1.0.0"
-          />
-
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Transport Type</label>
-            <select
-              v-model="formData.transport"
-              class="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:border-blue-500 focus:ring-blue-500"
-            >
-              <option value="streamable_http">Streamable HTTP (MCP 2025)</option>
-              <option value="sse">SSE (Server-Sent Events)</option>
-              <option value="http">HTTP (Legacy)</option>
-            </select>
-            <p class="text-xs text-gray-500 mt-1">Select the transport protocol for this MCP server</p>
-          </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Transport Type</label>
+          <select
+            v-model="formData.transport"
+            class="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:border-blue-500 focus:ring-blue-500"
+          >
+            <option value="streamable_http">Streamable HTTP</option>
+            <option value="sse">SSE (Server-Sent Events)</option>
+            <option value="http">HTTP (Legacy)</option>
+          </select>
+          <p class="text-xs text-gray-500 mt-1">Select the transport protocol for this MCP server</p>
         </div>
 
         <!-- Auth Config -->
@@ -133,6 +125,19 @@
           placeholder="tag1, tag2, tag3"
           hint="Comma-separated list of tags"
         />
+
+        <!-- Error Message -->
+        <div v-if="errorMessage" class="rounded-lg bg-red-50 border border-red-200 p-3">
+          <div class="flex items-start gap-2">
+            <svg class="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <div class="flex-1">
+              <p class="text-sm font-medium text-red-800">Failed to update server</p>
+              <p class="text-sm text-red-700 mt-1">{{ errorMessage }}</p>
+            </div>
+          </div>
+        </div>
 
         <!-- Tool Selection (shown after successful connection test) -->
         <div v-if="discoveredTools.length > 0" class="pt-4 border-t border-gray-200">
@@ -242,12 +247,12 @@ const testingConnection = ref(false)
 const connectionTestResult = ref(null)
 const discoveredTools = ref([])
 const selectedTools = ref([])
+const errorMessage = ref('')
 
 const formData = ref({
   name: '',
   description: '',
   url: '',
-  protocol_version: '1.0.0',
   transport: 'streamable_http',
   auth_type: 'none',
   auth_config: {},
@@ -276,7 +281,6 @@ const populateForm = () => {
     name: props.server.name || '',
     description: props.server.description || '',
     url: props.server.url || '',
-    protocol_version: props.server.protocol_version || '1.0.0',
     transport: props.server.transport || 'streamable_http',
     auth_type: props.server.auth_type || 'none',
     auth_config: props.server.auth_config || {},
@@ -303,17 +307,13 @@ const testConnection = async () => {
     const result = await api.post('/servers/test-connection', {
       url: formData.value.url,
       transport: formData.value.transport || 'streamable_http',
-      protocol_version: formData.value.protocol_version || '2025-11-25',
-      timeout: formData.value.timeout || 10
+      timeout: 30
     })
     connectionTestResult.value = result
 
-    // Extract discovered tools from response
+    // Extract discovered tools from response (store raw tools like ServerInspector)
     if (result.success && result.tools && Array.isArray(result.tools)) {
-      discoveredTools.value = result.tools.map(tool => ({
-        name: tool.name || 'Unknown',
-        description: tool.description || ''
-      }))
+      discoveredTools.value = result.tools
       // Keep previously selected tools that still exist, or select all if none were selected
       const existingToolNames = discoveredTools.value.map(t => t.name)
       const previouslySelected = selectedTools.value.filter(t => existingToolNames.includes(t))
@@ -342,12 +342,15 @@ const deselectAllTools = () => {
 const handleClose = () => {
   isOpen.value = false
   connectionTestResult.value = null
+  errorMessage.value = ''
 }
 
 const handleSubmit = async () => {
   if (!props.server?.id) return
 
   loading.value = true
+  errorMessage.value = ''
+
   try {
     const payload = {
       ...formData.value,
@@ -360,6 +363,7 @@ const handleSubmit = async () => {
     handleClose()
   } catch (error) {
     console.error('Failed to update server:', error)
+    errorMessage.value = error.response?.data?.error || error.message || 'An unexpected error occurred'
   } finally {
     loading.value = false
   }

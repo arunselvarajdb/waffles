@@ -79,6 +79,21 @@ auth:
       - profile
     allowed_domains: [] # Optional: restrict to specific email domains, e.g., ["example.com"]
 
+security:
+  # SSRF protection for server URL validation
+  ssrf:
+    enabled: true # Enable SSRF protection (recommended for production)
+    allow_private_networks: false # Allow 10.x, 172.16.x, 192.168.x (set true for K8s deployments)
+    allow_localhost: false # Allow localhost/127.0.0.1 (only for local dev)
+    # Allowed hostnames that bypass SSRF checks (e.g., Docker host, K8s services)
+    allowed_hosts:
+      - host.docker.internal # Docker Desktop host access
+      # - kubernetes.default.svc
+    # Allowed CIDR ranges for internal networks
+    allowed_cidrs: []
+      # - 172.17.0.0/16 # Docker default network
+      # - 10.0.0.0/8 # K8s pod network
+
 secrets:
   provider: env # Use 'env' for local dev, 'aws' for production
   aws:
