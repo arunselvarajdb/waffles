@@ -61,25 +61,17 @@
           </p>
         </div>
 
-        <div class="grid grid-cols-2 gap-4">
-          <BaseInput
-            v-model="formData.protocol_version"
-            label="Protocol Version"
-            placeholder="1.0.0"
-          />
-
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Transport Type</label>
-            <select
-              v-model="formData.transport"
-              class="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:border-blue-500 focus:ring-blue-500"
-            >
-              <option value="streamable_http">Streamable HTTP (MCP 2025)</option>
-              <option value="sse">SSE (Server-Sent Events)</option>
-              <option value="http">HTTP (Legacy)</option>
-            </select>
-            <p class="text-xs text-gray-500 mt-1">Select the transport protocol for this MCP server</p>
-          </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Transport Type</label>
+          <select
+            v-model="formData.transport"
+            class="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:border-blue-500 focus:ring-blue-500"
+          >
+            <option value="streamable_http">Streamable HTTP</option>
+            <option value="sse">SSE (Server-Sent Events)</option>
+            <option value="http">HTTP (Legacy)</option>
+          </select>
+          <p class="text-xs text-gray-500 mt-1">Select the transport protocol for this MCP server</p>
         </div>
 
         <!-- Auth Config -->
@@ -261,7 +253,6 @@ const formData = ref({
   name: '',
   description: '',
   url: '',
-  protocol_version: '1.0.0',
   transport: 'streamable_http',
   auth_type: 'none',
   auth_config: {},
@@ -290,7 +281,6 @@ const populateForm = () => {
     name: props.server.name || '',
     description: props.server.description || '',
     url: props.server.url || '',
-    protocol_version: props.server.protocol_version || '1.0.0',
     transport: props.server.transport || 'streamable_http',
     auth_type: props.server.auth_type || 'none',
     auth_config: props.server.auth_config || {},
@@ -317,17 +307,13 @@ const testConnection = async () => {
     const result = await api.post('/servers/test-connection', {
       url: formData.value.url,
       transport: formData.value.transport || 'streamable_http',
-      protocol_version: formData.value.protocol_version || '2025-11-25',
-      timeout: formData.value.timeout || 10
+      timeout: 30
     })
     connectionTestResult.value = result
 
-    // Extract discovered tools from response
+    // Extract discovered tools from response (store raw tools like ServerInspector)
     if (result.success && result.tools && Array.isArray(result.tools)) {
-      discoveredTools.value = result.tools.map(tool => ({
-        name: tool.name || 'Unknown',
-        description: tool.description || ''
-      }))
+      discoveredTools.value = result.tools
       // Keep previously selected tools that still exist, or select all if none were selected
       const existingToolNames = discoveredTools.value.map(t => t.name)
       const previouslySelected = selectedTools.value.filter(t => existingToolNames.includes(t))
