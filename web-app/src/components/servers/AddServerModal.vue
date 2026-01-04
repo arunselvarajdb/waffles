@@ -148,6 +148,14 @@
         </div>
 
         <!-- Tool Selection (shown after successful connection test) -->
+        <div v-if="connectionTestResult?.success && discoveredTools.length === 0" class="pt-4 border-t border-gray-200">
+          <div class="flex items-center gap-2 text-sm text-gray-600">
+            <svg class="h-5 w-5 text-yellow-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span>No tools discovered from this server. All tools will be available by default.</span>
+          </div>
+        </div>
         <div v-if="discoveredTools.length > 0" class="pt-4 border-t border-gray-200">
           <div class="flex items-center justify-between mb-3">
             <h4 class="text-sm font-medium text-gray-900">Available Tools ({{ discoveredTools.length }})</h4>
@@ -325,12 +333,17 @@ const testConnection = async () => {
     })
     connectionTestResult.value = result
 
+    // Debug: Log the full response
+    console.log('Test connection result:', result)
+    console.log('Tools in response:', result.tools)
+
     // Extract discovered tools from response
     if (result.success && result.tools && Array.isArray(result.tools)) {
       discoveredTools.value = result.tools.map(tool => ({
         name: tool.name || 'Unknown',
         description: tool.description || ''
       }))
+      console.log('Discovered tools:', discoveredTools.value)
     }
   } catch (error) {
     connectionTestResult.value = {
